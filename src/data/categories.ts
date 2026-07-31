@@ -1,0 +1,148 @@
+import type { Category } from "@/types/category";
+
+export const categories: Category[] = [
+  {
+    id: "cat_fruits_vegetables",
+    name: "Fruits & Vegetables",
+    slug: "fruits-vegetables",
+    description: "Fresh fruits, vegetables and herbs",
+    icon: "🥦",
+    background: "#E8F5E4",
+    productCount: 128,
+    active: true,
+    sortOrder: 1,
+  },
+  {
+    id: "cat_dairy_breakfast",
+    name: "Dairy & Breakfast",
+    slug: "dairy-breakfast",
+    description: "Milk, bread, eggs and breakfast essentials",
+    icon: "🥛",
+    background: "#EAF4FF",
+    productCount: 94,
+    active: true,
+    sortOrder: 2,
+  },
+  {
+    id: "cat_snacks",
+    name: "Snacks & Munchies",
+    slug: "snacks-munchies",
+    description: "Chips, biscuits, namkeen and quick bites",
+    icon: "🍿",
+    background: "#FFF2D9",
+    productCount: 176,
+    active: true,
+    sortOrder: 3,
+  },
+  {
+    id: "cat_beverages",
+    name: "Cold Drinks & Juices",
+    slug: "cold-drinks-juices",
+    description: "Soft drinks, juices and energy beverages",
+    icon: "🧃",
+    background: "#F2EBFF",
+    productCount: 82,
+    active: true,
+    sortOrder: 4,
+  },
+  {
+    id: "cat_personal_care",
+    name: "Personal Care",
+    slug: "personal-care",
+    description: "Daily hygiene and grooming essentials",
+    icon: "🧴",
+    background: "#FFEAF1",
+    productCount: 143,
+    active: true,
+    sortOrder: 5,
+  },
+  {
+    id: "cat_home_care",
+    name: "Home Care",
+    slug: "home-care",
+    description: "Cleaning, laundry and household products",
+    icon: "🧹",
+    background: "#E7F6F4",
+    productCount: 117,
+    active: true,
+    sortOrder: 6,
+  },
+  {
+    id: "cat_bakery",
+    name: "Bakery & Biscuits",
+    slug: "bakery-biscuits",
+    description: "Bread, cakes, cookies and baked goods",
+    icon: "🥐",
+    background: "#FFF0E3",
+    productCount: 73,
+    active: true,
+    sortOrder: 7,
+  },
+  {
+    id: "cat_grocery",
+    name: "Atta, Rice & Dal",
+    slug: "atta-rice-dal",
+    description: "Staples, pulses, flour and grains",
+    icon: "🌾",
+    background: "#F6F2DE",
+    productCount: 109,
+    active: true,
+    sortOrder: 8,
+  },
+  {
+    id: "cat_frozen",
+    name: "Frozen Food",
+    slug: "frozen-food",
+    description: "Frozen snacks, desserts and ready meals",
+    icon: "❄️",
+    background: "#E8F3FF",
+    productCount: 64,
+    active: true,
+    sortOrder: 9,
+  },
+  {
+    id: "cat_baby_care",
+    name: "Baby Care",
+    slug: "baby-care",
+    description: "Baby food, diapers and care products",
+    icon: "🧸",
+    background: "#FFF1E8",
+    productCount: 68,
+    active: true,
+    sortOrder: 10,
+  },
+  {
+    id: "cat_pet_care",
+    name: "Pet Care",
+    slug: "pet-care",
+    description: "Food, grooming and pet essentials",
+    icon: "🐾",
+    background: "#F0EBE5",
+    productCount: 51,
+    active: true,
+    sortOrder: 11,
+  },
+  {
+    id: "cat_stationery",
+    name: "Stationery",
+    slug: "stationery",
+    description: "School, office and writing essentials",
+    icon: "✏️",
+    background: "#EEF0FF",
+    productCount: 88,
+    active: true,
+    sortOrder: 12,
+  },
+];
+
+export function getActiveCategories() {
+  return categories
+    .filter((category) => category.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+export function getCategoryBySlug(slug: string) {
+  return categories.find(
+    (category) => category.active && category.slug === slug
+  );
+}

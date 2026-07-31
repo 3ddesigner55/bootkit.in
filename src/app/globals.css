@@ -1,0 +1,260 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f5;
+  --foreground: #151914;
+
+  --surface: #ffffff;
+  --surface-soft: #f2f5ef;
+  --surface-muted: #e9eee5;
+
+  --primary: #165c3a;
+  --primary-hover: #10472d;
+  --primary-light: #e3f4e9;
+
+  --accent: #d7a928;
+  --accent-light: #fff5ce;
+
+  --text-primary: #151914;
+  --text-secondary: #5d665c;
+  --text-muted: #818a80;
+
+  --border: #e2e7df;
+  --border-strong: #cdd5c9;
+
+  --success: #17844b;
+  --warning: #c88613;
+  --danger: #c53b3b;
+
+  --shadow-xs: 0 1px 2px rgba(15, 23, 18, 0.04);
+  --shadow-sm:
+    0 1px 3px rgba(15, 23, 18, 0.05),
+    0 4px 14px rgba(15, 23, 18, 0.04);
+  --shadow-md:
+    0 6px 20px rgba(15, 23, 18, 0.07),
+    0 2px 7px rgba(15, 23, 18, 0.04);
+  --shadow-lg:
+    0 18px 50px rgba(15, 23, 18, 0.1),
+    0 6px 18px rgba(15, 23, 18, 0.05);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(220, 242, 226, 0.42),
+      transparent 32%
+    ),
+    var(--background);
+  color: var(--foreground);
+  font-family: "Avenir Next", "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+}
+
+::selection {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #edf0eb;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #edf0eb;
+  border-radius: var(--radius-full);
+  background: #b7c0b4;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #929e8f;
+}
+
+.site-container {
+  width: min(100% - 32px, 1440px);
+  margin-inline: auto;
+}
+
+.section-spacing {
+  padding-block: 32px;
+}
+
+.surface-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.luxury-title {
+  color: var(--text-primary);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.muted-text {
+  color: var(--text-secondary);
+}
+
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(22, 92, 58, 0.18),
+    0 0 0 1px var(--primary);
+}
+
+.line-clamp-1 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .site-container {
+    width: min(100% - 24px, 1440px);
+  }
+
+  .section-spacing {
+    padding-block: 22px;
+  }
+
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  body {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    color: #000000 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .invoice-page {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .invoice-page section {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+  }
+
+  .invoice-page aside {
+    position: static !important;
+  }
+
+  a {
+    text-decoration: none !important;
+  }
+}

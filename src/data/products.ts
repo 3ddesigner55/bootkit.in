@@ -1,0 +1,200 @@
+  import type { Product } from "@/types/product";
+
+  export const products: Product[] = [
+    {
+      id: "[]",
+      name: "Fresh Full Cream Milk",
+      slug: "fresh-full-cream-milk-1l",
+      brand: "BootKiT Fresh",
+      categorySlug: "dairy-breakfast",
+      image: "",
+      variants: [],
+      fallbackIcon: "🥛",
+      unit: {
+        label: "1 litre",
+        value: "1-litre",
+      },
+      
+      mrp: 72,
+      price: 68,
+      stock: 36,
+      rating: 4.8,
+      reviewCount: 214,
+      deliveryMinutes: 15,
+      featured: true,
+      bestseller: true,
+      active: true,
+    },
+    {
+      id: "prd_banana_1kg",
+      name: "Fresh Banana",
+      slug: "fresh-banana-1kg",
+      brand: "Farm Fresh",
+      categorySlug: "fruits-vegetables",
+      image: "",
+      fallbackIcon: "🍌",
+      unit: {
+        label: "1 kg",
+        value: "1-kg",
+      },
+      mrp: 65,
+      price: 54,
+      stock: 24,
+      rating: 4.7,
+      reviewCount: 168,
+      deliveryMinutes: 15,
+      featured: true,
+      bestseller: true,
+      active: true,
+    },
+    {
+      id: "prd_tomato_1kg",
+      name: "Fresh Red Tomato",
+      slug: "fresh-red-tomato-1kg",
+      brand: "Farm Fresh",
+      categorySlug: "fruits-vegetables",
+      image: "",
+      fallbackIcon: "🍅",
+      unit: {
+        label: "1 kg",
+        value: "1-kg",
+      },
+      mrp: 58,
+      price: 45,
+      stock: 29,
+      rating: 4.6,
+      reviewCount: 126,
+      deliveryMinutes: 15,
+      featured: true,
+      bestseller: false,
+      active: true,
+    },
+    {
+      id: "prd_brown_bread",
+      name: "Soft Brown Bread",
+      slug: "soft-brown-bread",
+      brand: "Daily Bake",
+      categorySlug: "dairy-breakfast",
+      image: "",
+      fallbackIcon: "🍞",
+      unit: {
+        label: "400 g",
+        value: "400-g",
+      },
+      mrp: 55,
+      price: 49,
+      stock: 18,
+      rating: 4.5,
+      reviewCount: 93,
+      deliveryMinutes: 18,
+      featured: true,
+      bestseller: false,
+      active: true,
+    },
+    {
+      id: "prd_potato_chips",
+      name: "Classic Salted Potato Chips",
+      slug: "classic-salted-potato-chips",
+      brand: "CrunchBox",
+      categorySlug: "snacks-munchies",
+      image: "",
+      fallbackIcon: "🍟",
+      unit: {
+        label: "90 g",
+        value: "90-g",
+      },
+      mrp: 50,
+      price: 42,
+      stock: 46,
+      rating: 4.7,
+      reviewCount: 251,
+      deliveryMinutes: 12,
+      featured: true,
+      bestseller: true,
+      active: true,
+    },
+    {
+      id: "prd_orange_juice",
+      name: "100% Orange Fruit Juice",
+      slug: "orange-fruit-juice-1l",
+      brand: "FreshSip",
+      categorySlug: "cold-drinks-juices",
+      image: "",
+      fallbackIcon: "🧃",
+      unit: {
+        label: "1 litre",
+        value: "1-litre",
+      },
+      mrp: 130,
+      price: 109,
+      stock: 21,
+      rating: 4.6,
+      reviewCount: 141,
+      deliveryMinutes: 14,
+      featured: true,
+      bestseller: false,
+      active: true,
+    },
+    {
+      id: "prd_basmati_rice",
+      name: "Premium Basmati Rice",
+      slug: "premium-basmati-rice-5kg",
+      brand: "Golden Grain",
+      categorySlug: "atta-rice-dal",
+      image: "",
+      fallbackIcon: "🍚",
+      unit: {
+        label: "5 kg",
+        value: "5-kg",
+      },
+      mrp: 699,
+      price: 579,
+      stock: 14,
+      rating: 4.9,
+      reviewCount: 312,
+      deliveryMinutes: 20,
+      featured: true,
+      bestseller: true,
+      active: true,
+    },
+    {
+      id: "prd_floor_cleaner",
+      name: "Premium Floor Cleaner",
+      slug: "premium-floor-cleaner-1l",
+      brand: "PureHome",
+      categorySlug: "home-care",
+      image: "",
+      fallbackIcon: "🧴",
+      unit: {
+        label: "1 litre",
+        value: "1-litre",
+      },
+      mrp: 199,
+      price: 169,
+      stock: 32,
+      rating: 4.5,
+      reviewCount: 87,
+      deliveryMinutes: 18,
+      featured: true,
+      bestseller: false,
+      active: true,
+    },
+  ];
+
+  export function getActiveProducts() {
+    return products.filter((product) => product.active);
+  }
+
+  export function getFeaturedProducts() {
+    return products.filter((product) => product.active && product.featured);
+  }
+
+  export function getBestsellerProducts() {
+    return products.filter((product) => product.active && product.bestseller);
+  }
+
+  export function getProductBySlug(slug: string) {
+    return products.find(
+      (product) => product.active && product.slug === slug
+    );
+  }

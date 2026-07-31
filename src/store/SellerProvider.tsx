@@ -1,0 +1,6 @@
+"use client";
+import { createContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Seller, SellerStatus } from "@/types/seller";
+type Value = { sellers: Seller[]; registerSeller: (data: Omit<Seller, "id" | "status" | "commissionRate" | "createdAt">) => Seller; updateStatus: (id: string, status: SellerStatus) => void };
+export const SellerContext = createContext<Value | null>(null);
+export default function SellerProvider({ children }: { children: ReactNode }) { const [sellers, setSellers] = useState<Seller[]>([]); useEffect(() => { try { setSellers(JSON.parse(localStorage.getItem("bootkit_sellers_v1") || "[]")); } catch {} }, []); useEffect(() => { localStorage.setItem("bootkit_sellers_v1", JSON.stringify(sellers)); }, [sellers]); const value = useMemo(() => ({ sellers, registerSeller: (data: Omit<Seller, "id" | "status" | "commissionRate" | "createdAt">) => { const seller = { ...data, id: `sel_${crypto.randomUUID()}`, status: "PENDING" as const, commissionRate: 10, createdAt: new Date().toISOString() }; setSellers((current) => [seller, ...current]); return seller; }, updateStatus: (id: string, status: SellerStatus) => setSellers((current) => current.map((seller) => seller.id === id ? { ...seller, status } : seller)) }), [sellers]); return <SellerContext.Provider value={value}>{children}</SellerContext.Provider>; }
