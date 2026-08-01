@@ -340,13 +340,20 @@ export default function AccountPage() {
   description="View active discounts and coupon codes"
   border
 />
-<AccountLink
+{(session?.role === "ADMIN" || session?.role === "OWNER") && <AccountLink
   href="/admin"
   icon={Store}
-  title="Local admin dashboard"
+  title="Admin dashboard"
   description="Manage orders and store data"
   border
-/>
+/>}
+{session?.role === "OWNER" && <AccountLink
+  href="/owner"
+  icon={Store}
+  title="Owner control centre"
+  description="Manage customer and admin access"
+  border
+/>}
                 <button
                   type="button"
                   onClick={openLocationModal}

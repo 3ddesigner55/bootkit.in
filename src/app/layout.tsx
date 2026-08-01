@@ -22,6 +22,7 @@ import BrandAdminProvider from "@/store/BrandAdminProvider";
 import WalletProvider from "@/store/WalletProvider";
 import SellerProvider from "@/store/SellerProvider";
 import DeliveryPartnerProvider from "@/store/DeliveryPartnerProvider";
+import MobileCartBar from "@/components/layout/MobileCartBar";
 
 export const metadata: Metadata = {
   title: {
@@ -86,7 +87,8 @@ export default function RootLayout({
                            </div>
 
                          <Footer />
-                       <MobileBottomNav />
+                           <MobileBottomNav />
+                           <MobileCartBar />
                      <AppInstallBanner />
                     <ServiceWorkerRegister />
                   </div>

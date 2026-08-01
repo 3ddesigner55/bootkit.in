@@ -24,6 +24,7 @@ export default function LocationModal() {
   } = useLocation();
 
   const [query, setQuery] = useState("");
+  const requiresSelection = !location;
 
   const {
   activeDeliveryAreas: areas,
@@ -57,7 +58,7 @@ export default function LocationModal() {
     document.body.style.overflow = "hidden";
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !requiresSelection) {
         closeLocationModal();
       }
     };
@@ -71,7 +72,7 @@ export default function LocationModal() {
         closeOnEscape
       );
     };
-  }, [modalOpen, closeLocationModal]);
+  }, [modalOpen, closeLocationModal, requiresSelection]);
 
   if (!hydrated || !modalOpen) {
   return null;
@@ -84,7 +85,7 @@ export default function LocationModal() {
       aria-labelledby="location-modal-title"
       className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 backdrop-blur-[2px] sm:items-center sm:p-5"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (!requiresSelection && event.target === event.currentTarget) {
           closeLocationModal();
         }
       }}
@@ -110,14 +111,14 @@ export default function LocationModal() {
             </p>
           </div>
 
-          <button
+          {!requiresSelection && <button
             type="button"
             onClick={closeLocationModal}
             aria-label="Close location selector"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-soft)] text-[var(--text-secondary)]"
           >
             <X size={19} />
-          </button>
+          </button>}
         </div>
 
         <div className="px-4 pt-4 sm:px-6">

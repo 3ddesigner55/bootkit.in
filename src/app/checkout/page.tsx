@@ -5,12 +5,14 @@ import { useCoupon } from "@/hooks/useCoupon";
 import { getStoredOrders } from "@/lib/orders";
 import SavedAddressSelector from "@/components/checkout/SavedAddressSelector";
 import { useAddresses } from "@/hooks/useAddresses";
+import { useAccount } from "@/hooks/useAccount";
 import type { SavedAddress } from "@/types/address";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAdminDeliveryAreas } from "@/hooks/useAdminDeliveryAreas";
 import type { ReactNode } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import CheckoutProgress from "@/components/checkout/CheckoutProgress";
 import {
   useEffect,
@@ -23,7 +25,6 @@ import {
 import {
   ArrowLeft,
   Banknote,
-  Building2,
   CheckCircle2,
   ChevronRight,
   CreditCard,
@@ -31,7 +32,6 @@ import {
   MapPin,
   PackageCheck,
   ShieldCheck,
-  Wallet,
 } from "lucide-react";
 
 import Container from "@/components/ui/Container";
@@ -67,6 +67,7 @@ type CheckoutStep = 1 | 2 | 3;
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const { session, hydrated: accountHydrated } = useAccount();
 
   const {
     items,
@@ -137,6 +138,7 @@ const [paymentStatus, setPaymentStatus] = useState<
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [contactPickerAvailable, setContactPickerAvailable] = useState(false);
   const hasPreviousOrders = getStoredOrders().length > 0;
 
 const availableDeliveryAreas = useMemo(
@@ -149,6 +151,23 @@ const availableDeliveryAreas = useMemo(
     getDeliveryAreasByPincode,
   ]
 );
+
+useEffect(() => {
+  setContactPickerAvailable("contacts" in navigator);
+}, []);
+
+const pickContactNumber = async () => {
+  type ContactsNavigator = Navigator & { contacts?: { select: (properties: string[], options?: { multiple?: boolean }) => Promise<Array<{ tel?: string[] }>> } };
+  const contactNavigator = navigator as ContactsNavigator;
+  if (!contactNavigator.contacts) return;
+  try {
+    const contacts = await contactNavigator.contacts.select(["tel"], { multiple: false });
+    const phone = contacts[0]?.tel?.[0]?.replace(/\D/g, "").slice(-10);
+    if (phone) setAddress((current) => ({ ...current, phone }));
+  } catch {
+    // The customer dismissed the browser's contact picker.
+  }
+};
 
   const applySavedAddress = (savedAddress: SavedAddress) => {
   setSelectedAddressId(savedAddress.id);
@@ -217,6 +236,10 @@ useEffect(() => {
     window.clearInterval(timer);
   };
 }, [paymentMethod, timeLeft]);
+
+useEffect(() => {
+  if (accountHydrated && !session) router.replace("/login?next=/checkout");
+}, [accountHydrated, router, session]);
 
 const formattedTime = `${Math.floor(timeLeft / 60)
   .toString()
@@ -408,6 +431,11 @@ const selectAddressType = (type: AddressType) => {
 
   const placeOrder = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!session) {
+      router.replace("/login?next=/checkout");
+      return;
+    }
 
     if (checkoutStep !== 2) {
       continueToPayment();
@@ -641,15 +669,7 @@ if (
         required
       />
 
-      <Field
-        label="Mobile number"
-        name="phone"
-        value={address.phone}
-        onChange={updateAddress}
-        placeholder="10-digit mobile number"
-        inputMode="numeric"
-        required
-      />
+      <div><Field label="Mobile number" name="phone" value={address.phone} onChange={updateAddress} placeholder="10-digit mobile number" inputMode="numeric" required />{contactPickerAvailable && <button type="button" onClick={pickContactNumber} className="mt-2 text-xs font-black text-[var(--primary)]">Choose number from contacts</button>}</div>
 
       <Field
         label="House / Flat / Shop"
@@ -853,12 +873,12 @@ if (
 </div>
 
 
-                <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <PaymentOption
                     active={paymentMethod === "COD"}
                     icon={<Banknote size={21} />}
                     title="Cash on Delivery"
-                    description="Pay when your order arrives"
+                    description="Pay cash when your order arrives"
                     onClick={() => {
   setPaymentMethod("COD");
   setPaymentSubmitted(false);
@@ -872,8 +892,8 @@ if (
                   <PaymentOption
                     active={paymentMethod === "UPI"}
                     icon={<CreditCard size={21} />}
-                    title="Manual UPI"
-                    description="Pay using any UPI app"
+                    title="UPI · Scan & Pay"
+                    description="Scan QR with any UPI app"
                     onClick={() => {
   setPaymentMethod("UPI");
   setPaymentSubmitted(false);
@@ -883,38 +903,7 @@ if (
   setError("");
 }}
                   />
-
-                  <PaymentOption
-                    active={paymentMethod === "CARD"}
-                    icon={<CreditCard size={21} />}
-                    title="Card payment"
-                    description="Credit or debit card"
-                    onClick={() => { setPaymentMethod("CARD"); setPaymentSubmitted(false); setPaymentStatus("idle"); setError(""); }}
-                  />
-
-                  <PaymentOption
-                    active={paymentMethod === "NET_BANKING"}
-                    icon={<Building2 size={21} />}
-                    title="Net banking"
-                    description="Pay through your bank"
-                    onClick={() => { setPaymentMethod("NET_BANKING"); setPaymentSubmitted(false); setPaymentStatus("idle"); setError(""); }}
-                  />
-
-                  <PaymentOption
-                    active={paymentMethod === "WALLET"}
-                    icon={<Wallet size={21} />}
-                    title="Wallet"
-                    description="Use a supported wallet"
-                    onClick={() => { setPaymentMethod("WALLET"); setPaymentSubmitted(false); setPaymentStatus("idle"); setError(""); }}
-                  />
                 </div>
-
-                {(["CARD", "NET_BANKING", "WALLET"] as PaymentMethod[]).includes(paymentMethod) && (
-                  <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs leading-5 text-blue-900">
-                    <p className="font-black">Secure payment handoff</p>
-                    <p className="mt-1">Order place करने के बाद payment provider की सुरक्षित window खुलेगी। Card number, PIN या bank credentials BootKiT में store नहीं किए जाते।</p>
-                  </div>
-                )}
 
                 {paymentMethod === "UPI" && (
                   <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4">
@@ -966,10 +955,8 @@ if (
 </div>
 
   <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
-    <div className="flex h-48 w-48 flex-col items-center justify-center rounded-xl bg-white p-4 text-center shadow-sm">
-      <span className="text-4xl" aria-hidden="true">▦</span>
-      <span className="mt-3 text-xs font-black text-[var(--text-primary)]">bootkit@ybl</span>
-      <span className="mt-1 text-[10px] text-[var(--text-muted)]">UPI payment</span>
+    <div className="rounded-xl bg-white p-3 shadow-sm">
+      <QRCodeSVG value={`upi://pay?pa=bootkit@ybl&pn=BootKiT&am=${totalAmount.toFixed(2)}&cu=INR&tn=BootKiT%20order`} size={184} level="M" includeMargin />
     </div>
   </div>
 
@@ -1043,112 +1030,6 @@ if (
 
 
 
-<div className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-
-<div className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-  <div className="mb-4 flex items-center justify-between">
-    <h2 className="text-lg font-black text-[var(--text-primary)]">
-      Order Items
-    </h2>
-
-    <span className="text-xs font-bold text-[var(--text-muted)]">
-      {totalItems} Items
-    </span>
-  </div>
-
-  <div className="space-y-4">
-    {items.map((item) => (
-      <div
-        key={item.product.id}
-        className="flex items-center gap-3 border-b border-[var(--border)] pb-4 last:border-b-0 last:pb-0"
-      >
-        <span
-          role="img"
-          aria-label={item.product.name}
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] text-3xl"
-        >
-          {item.product.fallbackIcon}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-bold text-[var(--text-primary)]">
-            {item.product.name}
-          </h3>
-
-          <p className="mt-1 text-xs text-[var(--text-muted)]">
-            Qty : {item.quantity}
-          </p>
-        </div>
-
-        <div className="text-right">
-          <p className="text-sm font-black text-[var(--text-primary)]">
-            {formatPrice(item.product.price * item.quantity)}
-          </p>
-
-          {item.product.mrp > item.product.price && (
-            <p className="text-xs text-[var(--text-muted)] line-through">
-              {formatPrice(item.product.mrp * item.quantity)}
-            </p>
-          )}
-        </div>
-      </div>
-    ))}
-  </div>
-</div>
-
-
-
-<h2 className="mb-5 text-lg font-black text-[var(--text-primary)]">
-    Order Total
-  </h2>
-
- <h3 className="text-sm font-black text-[var(--text-primary)]">
-  Bill Details
-</h3>
-
-  <div className="mt-4 space-y-3 text-sm">
-    {savings > 0 && (
-      <SummaryRow
-        label="Product discount"
-        value={`-${formatPrice(savings)}`}
-        success
-      />
-    )}
-
-        {couponDiscount > 0 && (
-      <SummaryRow
-        label={`Offer discount (${appliedCoupon?.coupon.code})`}
-        value={`-${formatPrice(couponDiscount)}`}
-        success
-      />
-    )}
-
-    <SummaryRow
-      label="Delivery fee"
-      value={
-        deliveryFee === 0
-          ? "FREE"
-          : formatPrice(deliveryFee)
-      }
-      success={deliveryFee === 0}
-    />
-  </div>
-
-  <div className="my-4 border-t border-dashed border-[var(--border-strong)]" />
-
-  <div className="flex items-center justify-between">
-        <span className="text-sm font-black text-[var(--text-primary)]">
-      Final amount
-    </span>
-
-    <span className="text-xl font-black text-[var(--text-primary)]">
-      {formatPrice(totalAmount)}
-    </span>
-   </div>
-</div>
-
-
-
 <button
   type="submit"
   disabled={
@@ -1206,11 +1087,19 @@ if (
   
   <div className="rounded-3xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
 
-    <h2 className="text-lg font-black">
-      Order Summary
-    </h2>
+    <div className="flex items-center gap-2">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]"><ShieldCheck size={18} /></span>
+      <div><h2 className="text-lg font-black">Secure checkout</h2><p className="text-[10px] text-[var(--text-muted)]">Order items & payment summary</p></div>
+    </div>
 
-    <div className="mt-5 space-y-3 text-sm">
+    <div className="mt-5 rounded-2xl bg-[var(--surface-soft)] p-3">
+      <div className="mb-2 flex items-center justify-between"><p className="text-xs font-black">Order items</p><span className="text-[10px] font-bold text-[var(--text-muted)]">{totalItems} items</span></div>
+      <div className="space-y-2">
+        {items.map((item) => <div key={item.product.id} className="flex items-center gap-2.5 rounded-xl bg-white px-2.5 py-2"><span role="img" aria-label={item.product.name} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-soft)] text-lg">{item.product.fallbackIcon}</span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.product.name}</span><span className="block text-[10px] text-[var(--text-muted)]">Qty {item.quantity} · {item.product.unit.label}</span></span><span className="text-xs font-black">{formatPrice(item.product.price * item.quantity)}</span></div>)}
+      </div>
+    </div>
+
+    <div className="mt-5 space-y-2.5 text-sm">
 
       <SummaryRow
         label={`Items (${totalItems})`}
@@ -1257,7 +1146,7 @@ if (
       </span>
     </div>
 
-    <div className="mt-5 rounded-xl bg-green-50 p-3 text-xs text-green-700">
+    <div className="mt-4 rounded-xl bg-green-50 p-3 text-xs text-green-700">
       You save{" "}
       <span className="font-black">
         {formatPrice(savings + couponDiscount)}

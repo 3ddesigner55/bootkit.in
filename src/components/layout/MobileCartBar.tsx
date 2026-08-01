@@ -1,0 +1,15 @@
+"use client";
+
+import Link from "next/link";
+import { ChevronRight, ShoppingBag } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useCart } from "@/hooks/useCart";
+import { formatPrice } from "@/lib/utils";
+
+export default function MobileCartBar() {
+  const pathname = usePathname(); const { totalItems, subtotal, hydrated } = useCart(); const [visible, setVisible] = useState(true); const lastScrollY = useRef(0);
+  useEffect(() => { const onScroll = () => { const current = window.scrollY; setVisible(current < lastScrollY.current || current < 36); lastScrollY.current = current; }; window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
+  if (!hydrated || totalItems === 0 || pathname === "/cart" || pathname.startsWith("/checkout")) return null;
+  return <Link href="/cart" className={`fixed inset-x-3 bottom-[78px] z-40 flex h-14 items-center gap-3 rounded-2xl bg-[linear-gradient(135deg,#1f7a50,#10472d)] px-4 text-white shadow-[0_12px_28px_rgba(15,66,42,.28)] transition-transform duration-300 lg:hidden ${visible ? "translate-y-0" : "translate-y-28"}`}><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 shadow-inner"><ShoppingBag size={18} /></span><span className="min-w-0 flex-1"><span className="block text-xs font-black">View cart · {totalItems} {totalItems === 1 ? "item" : "items"}</span><span className="block text-[10px] text-white/70">Ready for checkout</span></span><span className="flex items-center gap-1 text-sm font-black">{formatPrice(subtotal)} <ChevronRight size={17} /></span></Link>;
+}

@@ -14,11 +14,24 @@ import type {
   ProductAdminContextValue,
   ProductInput,
 } from "@/types/productAdmin";
+import { supabase } from "@/lib/supabase/client";
 
 export const ProductAdminContext =
   createContext<ProductAdminContextValue | null>(null);
 
 const STORAGE_KEY = "bootkit_admin_products_v1";
+
+type DatabaseProduct = {
+  id: string; name: string; slug: string; brand: string; category_slug: string; image_url: string | null; fallback_icon: string; unit_label: string; unit_value: string; mrp: number; price: number; stock: number; rating: number; review_count: number; delivery_minutes: number; featured: boolean; bestseller: boolean; active: boolean;
+};
+
+function fromDatabaseProduct(product: DatabaseProduct): Product {
+  return { id: product.id, name: product.name, slug: product.slug, brand: product.brand, categorySlug: product.category_slug, image: product.image_url || "", fallbackIcon: product.fallback_icon, unit: { label: product.unit_label, value: product.unit_value }, mrp: Number(product.mrp), price: Number(product.price), stock: product.stock, rating: Number(product.rating), reviewCount: product.review_count, deliveryMinutes: product.delivery_minutes, featured: product.featured, bestseller: product.bestseller, active: product.active, variants: [] };
+}
+
+function toDatabaseProduct(product: Product) {
+  return { id: product.id, name: product.name, slug: product.slug, brand: product.brand, category_slug: product.categorySlug, image_url: product.image || null, fallback_icon: product.fallbackIcon, unit_label: product.unit.label, unit_value: product.unit.value, mrp: product.mrp, price: product.price, stock: product.stock, rating: product.rating, review_count: product.reviewCount, delivery_minutes: product.deliveryMinutes, featured: product.featured, bestseller: product.bestseller, active: product.active };
+}
 
 function cloneDefaultProducts(): Product[] {
   return defaultProducts.map((product) => ({
@@ -112,7 +125,7 @@ function createProductId() {
     typeof crypto !== "undefined" &&
     typeof crypto.randomUUID === "function"
   ) {
-    return `prd_${crypto.randomUUID()}`;
+    return crypto.randomUUID();
   }
 
   return `prd_${Date.now()}_${Math.random()
@@ -246,6 +259,13 @@ export default function ProductAdminProvider({
     useState(false);
 
   useEffect(() => {
+    if (supabase) {
+      void supabase.from("products").select("id, name, slug, brand, category_slug, image_url, fallback_icon, unit_label, unit_value, mrp, price, stock, rating, review_count, delivery_minutes, featured, bestseller, active").order("created_at", { ascending: false }).then(({ data }) => {
+        setProducts(data?.length ? (data as DatabaseProduct[]).map(fromDatabaseProduct) : readStoredProducts());
+        setHydrated(true);
+      });
+      return;
+    }
     setProducts(readStoredProducts());
     setHydrated(true);
   }, []);
@@ -253,6 +273,7 @@ export default function ProductAdminProvider({
   useEffect(() => {
     if (!hydrated) return;
 
+    if (supabase) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
@@ -326,6 +347,10 @@ export default function ProductAdminProvider({
         );
       }
 
+      if (supabase) {
+        void supabase.from("products").insert(toDatabaseProduct(createdProduct));
+      }
+
       return createdProduct;
     },
     []
@@ -370,6 +395,10 @@ export default function ProductAdminProvider({
         })
       );
 
+      if (updatedProduct && supabase) {
+        void supabase.from("products").update(toDatabaseProduct(updatedProduct)).eq("id", productId);
+      }
+
       return updatedProduct;
     },
     []
@@ -383,54 +412,30 @@ export default function ProductAdminProvider({
             product.id !== productId
         )
       );
+      if (supabase) void supabase.from("products").delete().eq("id", productId);
     },
     []
   );
 
   const toggleProductActive = useCallback(
     (productId: string) => {
-      setProducts((current) =>
-        current.map((product) =>
-          product.id === productId
-            ? {
-                ...product,
-                active: !product.active,
-              }
-            : product
-        )
-      );
+      const product = products.find((item) => item.id === productId);
+      if (product) updateProduct(productId, { active: !product.active });
     },
-    []
+    [products, updateProduct]
   );
 
   const toggleProductFeatured =
     useCallback((productId: string) => {
-      setProducts((current) =>
-        current.map((product) =>
-          product.id === productId
-            ? {
-                ...product,
-                featured: !product.featured,
-              }
-            : product
-        )
-      );
-    }, []);
+      const product = products.find((item) => item.id === productId);
+      if (product) updateProduct(productId, { featured: !product.featured });
+    }, [products, updateProduct]);
 
   const toggleProductBestseller =
     useCallback((productId: string) => {
-      setProducts((current) =>
-        current.map((product) =>
-          product.id === productId
-            ? {
-                ...product,
-                bestseller:
-                  !product.bestseller,
-              }
-            : product
-        )
-      );
-    }, []);
+      const product = products.find((item) => item.id === productId);
+      if (product) updateProduct(productId, { bestseller: !product.bestseller });
+    }, [products, updateProduct]);
 
   const resetProducts = useCallback(() => {
     setProducts(cloneDefaultProducts());

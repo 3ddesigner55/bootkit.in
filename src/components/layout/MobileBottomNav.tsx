@@ -48,7 +48,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-[var(--border)] bg-white/95 shadow-[0_-8px_30px_rgba(15,23,18,0.08)] backdrop-blur-xl lg:hidden"
+      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-white/80 bg-white/95 shadow-[0_-10px_30px_rgba(15,23,18,0.12)] backdrop-blur-xl lg:hidden"
     >
       <div className="grid h-[64px] grid-cols-5 items-center px-1">
         <NavigationItem
@@ -77,7 +77,7 @@ export default function MobileBottomNav() {
         >
           <span
             className={cn(
-              "relative flex h-14 w-14 items-center justify-center rounded-[20px] border-4 border-white shadow-[var(--shadow-md)]",
+              "relative flex h-14 w-14 items-center justify-center rounded-[20px] border-4 border-white shadow-[0_10px_0_#0d3e28,0_16px_24px_rgba(12,64,39,.30)] transition active:translate-y-1 active:shadow-[0_5px_0_#0d3e28,0_9px_14px_rgba(12,64,39,.22)]",
               pathname === "/cart"
                 ? "bg-[var(--primary-hover)] text-white"
                 : "bg-[var(--primary)] text-white"
@@ -145,13 +145,13 @@ function NavigationItem({
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-full flex-col items-center justify-center gap-1 rounded-xl transition",
+        "flex h-full flex-col items-center justify-center gap-1 rounded-xl transition active:scale-95",
         active
           ? "text-[var(--primary)]"
           : "text-[var(--text-muted)]"
       )}
     >
-      <span className="relative">
+      <span className={cn("relative flex h-8 w-8 items-center justify-center rounded-xl", active ? "bg-[var(--primary-light)] shadow-[inset_0_1px_2px_rgba(22,92,58,.15),0_3px_7px_rgba(15,23,18,.10)]" : "bg-[var(--surface-soft)] shadow-[inset_0_1px_2px_rgba(15,23,18,.08)]")}>
         <Icon
           size={20}
           strokeWidth={active ? 2.5 : 2}

@@ -13,10 +13,12 @@ export default function ProductVariantSelector({
   product,
   onChange,
 }: Props) {
-  const variants = product.variants?.filter((variant) => variant.active).map((variant) => ({
+  const activeVariants = product.variants?.filter((variant) => variant.active).map((variant) => ({
     ...variant,
     label: variant.name || variant.unit.label,
-  })) ?? [
+  })) ?? [];
+
+  const variants = activeVariants.length > 0 ? activeVariants : [
     {
       id: product.id,
       label: product.unit.label,
@@ -33,7 +35,7 @@ export default function ProductVariantSelector({
   useEffect(() => {
     setSelected(0);
     const firstVariant = variants[0];
-    onChange?.("unit" in firstVariant ? firstVariant : undefined);
+    onChange?.(firstVariant && "unit" in firstVariant ? firstVariant : undefined);
   // Product changes reset selection; callback is intentionally invoked only then.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);

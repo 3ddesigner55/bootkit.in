@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import AnnouncementBar from "@/components/home/AnnouncementBar";
-import CategorySection from "@/components/home/CategorySection";
 import HeroSection from "@/components/home/HeroSection";
-import ProductSection from "@/components/home/ProductSection";
+import HomeCatalog from "@/components/home/HomeCatalog";
 import Header from "@/components/layout/Header";
 import RecentlyViewed from "@/components/product/recommendations/RecentlyViewed";
 import Container from "@/components/ui/Container";
@@ -37,9 +36,8 @@ export default function Home() {
       <Header />
 
       <main>
+        <HomeCatalog />
         <HeroSection />
-        <CategorySection />
-        <ProductSection />
         <RecentlyViewed />
       </main>
     </div>

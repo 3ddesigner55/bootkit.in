@@ -2,78 +2,34 @@
 
 import Link from "next/link";
 import {
-    MapPin,
   ArrowLeft,
+  ArrowUpRight,
   Boxes,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
   Grid2X2,
+  MapPin,
   PackageCheck,
-  Settings,
+  Plus,
   ShoppingBag,
+  Sparkles,
   Store,
-  UsersRound,
+  TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
 import { getActiveCategories } from "@/data/categories";
-import { getActiveProducts } from "@/data/products";
+import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { getStoredOrders } from "@/lib/orders";
 import { formatPrice } from "@/lib/utils";
 import type { BootkitOrder } from "@/types/order";
 
-const adminModules = [
-    {
-  title: "Delivery areas",
-  description: "Manage wards, pincodes, fees and delivery time",
-  href: "/admin/delivery-areas",
-  icon: MapPin,
-},
-  {
-
-    title: "Orders",
-    description: "Manage order status, payment and delivery",
-    href: "/admin/orders",
-    icon: ShoppingBag,
-  },
-  {
-    title: "Products",
-    description: "Manage local product inventory",
-    href: "/admin/products",
-    icon: Boxes,
-  },
-  {
-    title: "Categories",
-    description: "Manage departments and product groups",
-    href: "/admin/categories",
-    icon: Grid2X2,
-  },
-  {
-    title: "Brands",
-    description: "Manage product brands and visibility",
-    href: "/admin/brands",
-    icon: Store,
-  },
-  {
-    title: "Inventory",
-    description: "Monitor stock and low-stock alerts",
-    href: "/admin/inventory",
-    icon: Boxes,
-  },
-  {
-    title: "Customers",
-    description: "View local customer profiles and activity",
-    href: "/admin/customers",
-    icon: UsersRound,
-  },
-  {
-    title: "Store settings",
-    description: "Delivery, payment and app preferences",
-    href: "/admin/settings",
-    icon: Settings,
-  },
+const managementLinks = [
+  { title: "Orders", href: "/admin/orders", icon: ShoppingBag, tone: "bg-amber-100 text-amber-700" },
+  { title: "Products", href: "/admin/products", icon: Boxes, tone: "bg-sky-100 text-sky-700" },
+  { title: "Categories", href: "/admin/categories", icon: Grid2X2, tone: "bg-violet-100 text-violet-700" },
+  { title: "Delivery areas", href: "/admin/delivery-areas", icon: MapPin, tone: "bg-rose-100 text-rose-700" },
 ];
 
 export default function AdminDashboardClient() {
@@ -85,312 +41,94 @@ export default function AdminDashboardClient() {
     setHydrated(true);
   }, []);
 
-  const products = getActiveProducts();
+  const { activeProducts: products } = useAdminProducts();
   const categories = getActiveCategories();
-
   const stats = useMemo(() => {
-    const activeOrders = orders.filter(
-      (order) =>
-        order.status !== "Delivered" &&
-        order.status !== "Cancelled"
-    );
+    const activeOrders = orders.filter((order) => order.status !== "Delivered" && order.status !== "Cancelled");
+    const deliveredOrders = orders.filter((order) => order.status === "Delivered");
+    const revenue = orders.filter((order) => order.status !== "Cancelled").reduce((total, order) => total + order.totalAmount, 0);
 
-    const deliveredOrders = orders.filter(
-      (order) => order.status === "Delivered"
-    );
-
-    const revenue = orders
-      .filter((order) => order.status !== "Cancelled")
-      .reduce((total, order) => total + order.totalAmount, 0);
-
-    return {
-      totalOrders: orders.length,
-      activeOrders: activeOrders.length,
-      deliveredOrders: deliveredOrders.length,
-      revenue,
-    };
+    return { totalOrders: orders.length, activeOrders: activeOrders.length, deliveredOrders: deliveredOrders.length, revenue };
   }, [orders]);
-
-  const recentOrders = orders.slice(0, 5);
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
       <Header />
-
       <main>
         <Container className="py-4 sm:py-8">
-          <div className="mb-6 flex items-center gap-3">
-            <Link
-              href="/"
-              aria-label="Back to home"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
-            >
-              <ArrowLeft size={19} />
-            </Link>
-
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--primary)]">
-                BootKiT local admin
-              </p>
-
-              <h1 className="text-[25px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[32px]">
-                Admin dashboard
-              </h1>
-
-              <p className="text-xs text-[var(--text-muted)] sm:text-sm">
-                Manage your local store and customer orders
-              </p>
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div className="flex items-center gap-3">
+              <Link href="/" aria-label="Back to home" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                <ArrowLeft size={19} />
+              </Link>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--primary)]">BootKiT · local admin</p>
+                <h1 className="mt-0.5 text-[28px] font-black tracking-[-0.05em] text-[var(--text-primary)] sm:text-[36px]">Good morning, admin.</h1>
+              </div>
             </div>
+            <Link href="/admin/products/new" className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 text-sm font-black text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--primary-hover)]">
+              <Plus size={18} /> Add product
+            </Link>
           </div>
 
-          {!hydrated ? (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-36 animate-pulse rounded-[22px] bg-white"
-                />
-              ))}
-            </div>
-          ) : (
-            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <DashboardStat
-                icon={ShoppingBag}
-                label="Total orders"
-                value={stats.totalOrders.toString()}
-              />
-
-              <DashboardStat
-                icon={Clock3}
-                label="Active orders"
-                value={stats.activeOrders.toString()}
-              />
-
-              <DashboardStat
-                icon={PackageCheck}
-                label="Delivered"
-                value={stats.deliveredOrders.toString()}
-              />
-
-              <DashboardStat
-                icon={CircleDollarSign}
-                label="Revenue"
-                value={formatPrice(stats.revenue)}
-              />
-            </section>
-          )}
-
-          <section className="mt-6">
-            <div className="mb-4">
-              <h2 className="text-xl font-black tracking-[-0.035em] text-[var(--text-primary)]">
-                Store management
-              </h2>
-
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                Open a module to manage BootKiT
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {adminModules.map((module) => {
-                const Icon = module.icon;
-
-                return (
-                  <Link
-                    key={module.href}
-                    href={module.href}
-                    className="group flex items-center gap-4 rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-xs)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-[var(--shadow-md)]"
-                  >
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-[var(--primary-light)] text-[var(--primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white">
-                      <Icon size={22} />
-                    </span>
-
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-black text-[var(--text-primary)]">
-                        {module.title}
-                      </span>
-
-                      <span className="mt-1 block text-[10px] leading-4 text-[var(--text-muted)]">
-                        {module.description}
-                      </span>
-                    </span>
-
-                    <ChevronRight
-                      size={18}
-                      className="shrink-0 text-[var(--text-muted)]"
-                    />
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-
-          <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] sm:p-5">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-black text-[var(--text-primary)]">
-                    Recent orders
-                  </h2>
-
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    Latest customer orders on this device
-                  </p>
-                </div>
-
-                <Link
-                  href="/admin/orders"
-                  className="text-xs font-black text-[var(--primary)]"
-                >
-                  View all
-                </Link>
-              </div>
-
-              {recentOrders.length > 0 ? (
-                <div className="mt-5 divide-y divide-[var(--border)]">
-                  {recentOrders.map((order) => (
-                    <Link
-                      key={order.id}
-                      href={`/orders/${order.orderNumber}`}
-                      className="flex items-center gap-3 py-4 first:pt-0 last:pb-0"
-                    >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-soft)] text-[var(--primary)]">
-                        <ShoppingBag size={18} />
-                      </span>
-
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-black text-[var(--text-primary)]">
-                          {order.orderNumber}
-                        </span>
-
-                        <span className="mt-1 block truncate text-[10px] text-[var(--text-muted)]">
-                          {order.address.fullName} · {order.status}
-                        </span>
-                      </span>
-
-                      <span className="shrink-0 text-xs font-black text-[var(--text-primary)]">
-                        {formatPrice(order.totalAmount)}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-5 flex min-h-48 flex-col items-center justify-center rounded-2xl bg-[var(--surface-soft)] text-center">
-                  <ShoppingBag
-                    size={30}
-                    className="text-[var(--text-muted)]"
-                  />
-
-                  <p className="mt-3 text-sm font-black text-[var(--text-primary)]">
-                    No orders yet
-                  </p>
-
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    Customer orders will appear here
-                  </p>
-                </div>
-              )}
-            </section>
-
-            <aside className="space-y-4">
-              <section className="rounded-[24px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-[var(--primary-light)] text-[var(--primary)]">
-                    <Store size={20} />
-                  </span>
-
-                  <div>
-                    <h2 className="text-sm font-black text-[var(--text-primary)]">
-                      Local inventory
-                    </h2>
-
-                    <p className="text-[10px] text-[var(--text-muted)]">
-                      Current BootKiT catalogue
-                    </p>
+          {!hydrated ? <DashboardSkeleton /> : (
+            <div className="grid gap-3 lg:grid-cols-12 lg:grid-rows-[minmax(190px,auto)_minmax(220px,auto)_minmax(230px,auto)]">
+              <section className="relative overflow-hidden rounded-[28px] bg-[var(--primary)] p-6 text-white shadow-[var(--shadow-md)] lg:col-span-5 lg:row-span-2 sm:p-7">
+                <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10" />
+                <div className="absolute -bottom-20 right-8 h-48 w-48 rounded-full border-[28px] border-white/10" />
+                <div className="relative flex h-full flex-col">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-amber-200"><Sparkles size={21} /></span>
+                  <p className="mt-7 text-sm font-bold text-white/65">Store revenue</p>
+                  <p className="mt-1 text-4xl font-black tracking-[-0.06em] sm:text-5xl">{formatPrice(stats.revenue)}</p>
+                  <div className="mt-auto flex items-end justify-between pt-8">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-xs font-bold text-white/85"><TrendingUp size={14} /> All-time earnings</span>
+                    <Link href="/admin/reports" aria-label="View sales reports" className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[var(--primary)] transition hover:scale-105"><ArrowUpRight size={19} /></Link>
                   </div>
                 </div>
+              </section>
 
-                <div className="mt-5 space-y-3">
-                  <InventoryRow
-                    label="Products"
-                    value={products.length.toString()}
-                  />
+              <StatTile className="lg:col-span-3" icon={ShoppingBag} label="Total orders" value={String(stats.totalOrders)} detail="Orders received" />
+              <StatTile className="lg:col-span-2" icon={Clock3} label="In progress" value={String(stats.activeOrders)} detail="Need attention" accent />
+              <StatTile className="lg:col-span-2" icon={PackageCheck} label="Delivered" value={String(stats.deliveredOrders)} detail="Successfully fulfilled" />
 
-                  <InventoryRow
-                    label="Categories"
-                    value={categories.length.toString()}
-                  />
-
-                  <InventoryRow
-                    label="Service pincode"
-                    value="331403"
-                  />
-
-                  <InventoryRow
-                    label="Storage"
-                    value="Local device"
-                  />
+              <section className="rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] lg:col-span-7 lg:row-span-2 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--primary)]">Live activity</p><h2 className="mt-1 text-xl font-black tracking-[-0.04em]">Recent orders</h2></div>
+                  <Link href="/admin/orders" className="inline-flex items-center gap-1 text-xs font-black text-[var(--primary)]">View all <ChevronRight size={15} /></Link>
                 </div>
+                {orders.slice(0, 4).length ? <div className="mt-4 divide-y divide-[var(--border)]">{orders.slice(0, 4).map((order) => <Link key={order.id} href={`/orders/${order.orderNumber}`} className="group flex items-center gap-3 py-3.5 first:pt-1 transition hover:px-1">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-soft)] text-[var(--primary)]"><ShoppingBag size={17} /></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{order.orderNumber}</span><span className="mt-1 block truncate text-[10px] text-[var(--text-muted)]">{order.address.fullName} · {order.status}</span></span>
+                  <span className="text-xs font-black">{formatPrice(order.totalAmount)}</span><ChevronRight size={16} className="text-[var(--text-muted)] transition group-hover:text-[var(--primary)]" />
+                </Link>)}</div> : <div className="mt-5 flex min-h-40 flex-col items-center justify-center rounded-2xl bg-[var(--surface-soft)] text-center"><ShoppingBag size={25} className="text-[var(--text-muted)]" /><p className="mt-2 text-sm font-black">No orders yet</p><p className="mt-1 text-xs text-[var(--text-muted)]">New customer orders will appear here.</p></div>}
               </section>
 
-              <section className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-black text-amber-900">
-                  Local admin mode
-                </p>
-
-                <p className="mt-1 text-[10px] leading-5 text-amber-800">
-                  Admin access is not protected yet. Secure admin login will be
-                  added when you decide to connect authentication.
-                </p>
+              <section className="rounded-[28px] bg-[var(--surface-muted)] p-5 lg:col-span-5 sm:p-6">
+                <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">Catalogue</p><h2 className="mt-1 text-lg font-black tracking-[-0.04em]">Your inventory</h2></div><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--primary)] shadow-[var(--shadow-xs)]"><Store size={18} /></span></div>
+                <div className="mt-5 grid grid-cols-2 gap-3"><InventoryCount label="Active products" value={String(products.length)} /><InventoryCount label="Categories" value={String(categories.length)} /></div>
+                <Link href="/admin/inventory" className="mt-4 flex items-center justify-between rounded-xl bg-white px-4 py-3 text-xs font-black transition hover:text-[var(--primary)]">Open inventory <ArrowUpRight size={16} /></Link>
               </section>
-            </aside>
-          </div>
+
+              <section className="rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] lg:col-span-12 sm:p-6">
+                <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--primary)]">Quick access</p><h2 className="mt-1 text-lg font-black tracking-[-0.04em]">Manage your store</h2></div><Link href="/admin/brands" className="hidden items-center gap-1 text-xs font-black text-[var(--primary)] sm:inline-flex">Manage brands <ChevronRight size={15} /></Link></div>
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{managementLinks.map(({ title, href, icon: Icon, tone }) => <Link key={href} href={href} className="group flex items-center gap-3 rounded-2xl bg-[var(--surface-soft)] p-3.5 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)]"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}><Icon size={18} /></span><span className="min-w-0 text-xs font-black leading-4">{title}</span></Link>)}</div>
+              </section>
+            </div>
+          )}
         </Container>
       </main>
     </div>
   );
 }
 
-function DashboardStat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof ShoppingBag;
-  label: string;
-  value: string;
-}) {
-  return (
-    <article className="rounded-[22px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-xs)]">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]">
-        <Icon size={19} />
-      </span>
-
-      <p className="mt-4 text-xl font-black tracking-[-0.04em] text-[var(--text-primary)]">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[10px] font-bold text-[var(--text-muted)]">
-        {label}
-      </p>
-    </article>
-  );
+function StatTile({ icon: Icon, label, value, detail, accent, className }: { icon: typeof ShoppingBag; label: string; value: string; detail: string; accent?: boolean; className?: string }) {
+  return <section className={`rounded-[28px] border p-5 shadow-[var(--shadow-sm)] ${accent ? "border-amber-200 bg-amber-50" : "border-[var(--border)] bg-white"} ${className ?? ""}`}><span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${accent ? "bg-amber-200 text-amber-800" : "bg-[var(--primary-light)] text-[var(--primary)]"}`}><Icon size={18} /></span><p className="mt-5 text-3xl font-black tracking-[-0.055em]">{value}</p><p className="mt-1 text-xs font-black">{label}</p><p className="mt-1 text-[10px] text-[var(--text-muted)]">{detail}</p></section>;
 }
 
-function InventoryRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 text-xs">
-      <span className="text-[var(--text-muted)]">{label}</span>
+function InventoryCount({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl bg-white p-4"><p className="text-2xl font-black tracking-[-0.04em]">{value}</p><p className="mt-1 text-[10px] font-bold text-[var(--text-muted)]">{label}</p></div>;
+}
 
-      <span className="font-black text-[var(--text-primary)]">
-        {value}
-      </span>
-    </div>
-  );
+function DashboardSkeleton() {
+  return <div className="grid gap-3 lg:grid-cols-12"><div className="h-72 animate-pulse rounded-[28px] bg-[var(--surface-muted)] lg:col-span-5" />{Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-40 animate-pulse rounded-[28px] bg-white lg:col-span-2" />)}</div>;
 }

@@ -19,6 +19,7 @@ export const LocationContext =
   createContext<LocationContextValue | null>(null);
 
 const STORAGE_KEY = "bootkit_location_v1";
+const DEVICE_LOCATION_KEY = "bootkit_device_location_v1";
 
 function readStoredLocation(): SelectedLocation | null {
   try {
@@ -64,6 +65,10 @@ export default function LocationProvider({
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    if (hydrated && !location) setModalOpen(true);
+  }, [hydrated, location]);
+
   const openLocationModal = useCallback(() => {
     setModalOpen(true);
   }, []);
@@ -87,6 +92,16 @@ export default function LocationProvider({
         STORAGE_KEY,
         JSON.stringify(selectedLocation)
       );
+
+      // Ask only after the customer has chosen a delivery area. Coordinates are
+      // retained locally for future delivery-availability checks.
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => window.localStorage.setItem(DEVICE_LOCATION_KEY, JSON.stringify({ latitude: position.coords.latitude, longitude: position.coords.longitude, updatedAt: new Date().toISOString() })),
+          () => undefined,
+          { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+        );
+      }
     } catch {
       // Local storage failure should not break location selection.
     }

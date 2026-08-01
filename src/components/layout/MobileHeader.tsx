@@ -9,12 +9,18 @@ import { useCart } from "@/hooks/useCart";
 import { useLocation } from "@/hooks/useLocation";
 import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useAdminCategories } from "@/hooks/useAdminCategories";
+import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export default function MobileHeader() {
   const { totalItems, hydrated: cartHydrated } = useCart();
 
   const { location,hydrated: locationHydrated,openLocationModal,} = useLocation();
   const { unreadCount,hydrated: notificationsHydrated,} = useNotifications(); 
+  const { activeCategories, hydrated: categoriesHydrated } = useAdminCategories();
+  const pathname = usePathname(); const [showDiscover, setShowDiscover] = useState(true); const lastScrollY = useRef(0);
+  useEffect(() => { const onScroll = () => { const current = window.scrollY; setShowDiscover(current < lastScrollY.current || current < 36); lastScrollY.current = current; }; window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
     
    
   return (
@@ -83,11 +89,10 @@ export default function MobileHeader() {
           </Link>
         </div>
 
-        <SearchBar
-          compact
-          className="mt-3"
-          placeholder="Search products and categories"
-        />
+        <div className={`overflow-hidden transition-all duration-300 ${showDiscover ? "mt-3 max-h-40 opacity-100" : "mt-0 max-h-0 opacity-0"}`}>
+          <SearchBar compact placeholder="Search products and categories" />
+          {pathname === "/" && categoriesHydrated && <div className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1"><span className="flex shrink-0 items-center rounded-full bg-[var(--primary)] px-3 py-1.5 text-[10px] font-bold text-white">All</span>{activeCategories.map((category) => <span key={category.id} className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-soft)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)]"><span>{category.icon}</span>{category.name}</span>)}</div>}
+        </div>
       </Container>
     </header>
   );

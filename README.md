@@ -16,6 +16,15 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Supabase database setup
+
+1. Create a Supabase project and open its SQL Editor.
+2. Run [`supabase/migrations/20260731_initial_schema.sql`](supabase/migrations/20260731_initial_schema.sql).
+3. Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the project Connect dialog.
+4. Create your first account through the app. In Supabase, find that user UUID in **Authentication → Users**, then run the final `update public.profiles ...` command in the migration to promote it to `OWNER`.
+
+The Supabase keys are deliberately not committed. Until `.env.local` is configured, the app retains its current local-demo storage behaviour.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

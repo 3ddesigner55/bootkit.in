@@ -7,7 +7,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { getActiveProducts } from "@/data/products";
+import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { useCart } from "@/hooks/useCart";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/types/product";
@@ -20,10 +20,11 @@ export default function FrequentlyBoughtTogether({
   product,
 }: FrequentlyBoughtTogetherProps) {
   const { addItem, hydrated } = useCart();
+  const { activeProducts } = useAdminProducts();
 
   const suggestedProducts = useMemo(
     () =>
-      getActiveProducts()
+      activeProducts
         .filter(
           (item) =>
             item.id !== product.id &&
@@ -39,7 +40,7 @@ export default function FrequentlyBoughtTogether({
           return bSameCategory - aSameCategory;
         })
         .slice(0, 2),
-    [product]
+    [activeProducts, product]
   );
 
   const allProducts = useMemo(

@@ -71,6 +71,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Keep the product UI visually calm and consistent with a regular font weight. */
+body,
+button,
+input,
+textarea,
+select,
+.font-medium,
+.font-semibold,
+.font-bold,
+.font-extrabold,
+.font-black {
+  font-weight: 400 !important;
+}
+
 button,
 input,
 textarea,
