@@ -1,8 +1,10 @@
+
 import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
   Clock3,
+  Download,
   MapPin,
   ShoppingBasket,
   Sparkles,
@@ -33,35 +35,33 @@ export default function HeroSection() {
               </div>
 
               <h1 className="mt-5 max-w-3xl text-[38px] font-black leading-[0.98] tracking-[-0.055em] text-[var(--text-primary)] sm:text-[48px] lg:text-[64px]">
-                Daily essentials,
+                Groceries delivered in 10–20 minutes.
                 <span className="block text-[var(--primary)]">
-                  delivered beautifully.
+                Fresh. Fast. Affordable.
                 </span>
               </h1>
 
               <p className="mt-5 max-w-xl text-[14px] leading-6 text-[var(--text-secondary)] sm:text-[16px] sm:leading-7">
-                Groceries, fresh produce, snacks, household essentials and
-                personal care products delivered across selected areas in your
-                city.
+                Fresh groceries, vegetables, fruits, dairy and daily essentials delivered to your doorstep in just 10–20 minutes.
               </p>
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/categories"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-6 text-sm font-bold text-white shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:bg-[var(--primary-hover)] hover:shadow-[var(--shadow-md)]"
-                >
-                  Start shopping
-                  <ArrowRight size={18} />
-                </Link>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+  <Link
+    href="/categories"
+    className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-6 text-sm font-semibold text-white shadow-[var(--shadow-sm)] transition hover:-translate-y-0.5 hover:bg-[var(--primary-hover)]"
+  >
+    Order Online
+    <ArrowRight size={18} />
+  </Link>
 
-                <button
-                  type="button"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--border-strong)] bg-white/80 px-6 text-sm font-bold text-[var(--text-primary)] transition hover:bg-white"
-                >
-                  <MapPin size={18} className="text-[var(--primary)]" />
-                  Check delivery area
-                </button>
-              </div>
+  <Link
+    href="#"
+    className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-[var(--primary)] bg-white px-6 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--primary-light)]"
+  >
+    <Download size={18} />
+    Download App
+  </Link>
+</div>
 
               <div className="mt-7 flex flex-wrap gap-2">
                 {quickCategories.map((category) => (

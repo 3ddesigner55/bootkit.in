@@ -24,6 +24,7 @@ import SellerProvider from "@/store/SellerProvider";
 import DeliveryPartnerProvider from "@/store/DeliveryPartnerProvider";
 import MobileCartBar from "@/components/layout/MobileCartBar";
 
+
 export const metadata: Metadata = {
   title: {
     default: "BootKiT — Fast Local Delivery",

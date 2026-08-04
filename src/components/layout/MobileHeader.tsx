@@ -24,7 +24,7 @@ export default function MobileHeader() {
     
    
   return (
-    <header className="border-b border-[var(--border)] bg-white/95 backdrop-blur-xl lg:hidden">
+    <header className="border-b border-[var(--primary-hover)] bg-[var(--primary)] text-white shadow-[0_5px_16px_rgba(12,64,39,.24)] lg:hidden">
       <Container className="py-3">
         <div className="flex items-center justify-between gap-3">
           <Logo compact />
@@ -33,14 +33,14 @@ export default function MobileHeader() {
             type="button"
             onClick={openLocationModal}
             aria-label="Select delivery location"
-            className="min-w-0 flex-1 rounded-xl px-2 py-1.5 text-left transition active:bg-[var(--surface-soft)]"
+            className="min-w-0 flex-1 rounded-xl px-2 py-1.5 text-left transition active:bg-white/10"
           >
-            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.11em] text-[var(--text-muted)]">
+            <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.11em] text-white/65">
               <MapPin size={12} />
               Delivering to
             </span>
 
-            <span className="mt-0.5 flex items-center gap-1 text-[13px] font-extrabold text-[var(--text-primary)]">
+            <span className="mt-0.5 flex items-center gap-1 text-[13px] text-white">
               <span className="truncate">
                 {locationHydrated && location
                   ? location.area
@@ -54,7 +54,7 @@ export default function MobileHeader() {
             </span>
 
             {locationHydrated && location && (
-              <span className="mt-0.5 block truncate text-[9px] font-bold text-[var(--primary)]">
+              <span className="mt-0.5 block truncate text-[9px] text-[#ffe094]">
                 {location.pincode} · {location.deliveryMinutes}
               </span>
             )}
@@ -63,7 +63,7 @@ export default function MobileHeader() {
           <Link
   href="/notifications"
   aria-label="Open notifications"
-  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
+  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white"
 >
   <Bell size={18} />
 
@@ -77,7 +77,7 @@ export default function MobileHeader() {
           <Link
             href="/cart"
             aria-label="Open cart"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white shadow-[var(--shadow-sm)]"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--primary)] shadow-[var(--shadow-sm)]"
           >
             <ShoppingBag size={19} />
 
@@ -91,7 +91,7 @@ export default function MobileHeader() {
 
         <div className={`overflow-hidden transition-all duration-300 ${showDiscover ? "mt-3 max-h-40 opacity-100" : "mt-0 max-h-0 opacity-0"}`}>
           <SearchBar compact placeholder="Search products and categories" />
-          {pathname === "/" && categoriesHydrated && <div className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1"><span className="flex shrink-0 items-center rounded-full bg-[var(--primary)] px-3 py-1.5 text-[10px] font-bold text-white">All</span>{activeCategories.map((category) => <span key={category.id} className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-soft)] px-3 py-1.5 text-[10px] text-[var(--text-secondary)]"><span>{category.icon}</span>{category.name}</span>)}</div>}
+          {pathname === "/" && categoriesHydrated && <div className="-mx-3 mt-3 flex gap-5 overflow-x-auto px-3 pb-1"><span className="flex shrink-0 flex-col items-center gap-1 text-[10px] text-white"><span className="text-xl">🛍️</span>All</span>{activeCategories.slice(0, 7).map((category) => <span key={category.id} className="flex shrink-0 flex-col items-center gap-1 text-[10px] text-white/90"><span className="text-xl">{category.icon}</span>{category.name}</span>)}</div>}
         </div>
       </Container>
     </header>

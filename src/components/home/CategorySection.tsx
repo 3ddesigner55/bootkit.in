@@ -26,16 +26,17 @@ if (!hydrated) {
           actionHref="/categories"
         />
 
-        <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 md:grid-cols-6 xl:grid-cols-8">
+        <div className="-mx-3 flex snap-x snap-mandatory gap-2
+         overflow-x-auto px-3 pb-2 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 md:grid-cols-6 xl:grid-cols-8">
           {categories.map((category) => (
             <Link
               key={category.id}
               href={`/category/${category.slug}`}
-              className="group w-[126px] shrink-0 snap-start sm:w-auto"
+              className="group w-[92px] shrink-0 snap-start sm:w-auto"
             >
-              <div className="relative h-full overflow-hidden rounded-[20px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-xs)] transition duration-300 hover:-translate-y-1 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]">
+              <div className="relative h-full overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-2 shadow-[var(--shadow-xs)] transition duration-300 hover:-translate-y-1 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)]">
                 <div
-                  className="flex aspect-square items-center justify-center rounded-[16px] text-[42px] transition duration-300 group-hover:scale-[1.03]"
+                  className="flex aspect-square items-center justify-center rounded-2xl text-[50px] transition duration-300 group-hover:scale-[1.03]"
                   style={{ backgroundColor: category.background }}
                   aria-hidden="true"
                 >
@@ -47,15 +48,9 @@ if (!hydrated) {
                     {category.name}
                   </h3>
 
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-[var(--text-muted)]">
-                      {category.productCount} products
-                    </span>
-
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface-soft)] text-[var(--primary)] transition group-hover:bg-[var(--primary)] group-hover:text-white">
-                      <ArrowRight size={12} strokeWidth={2.5} />
-                    </span>
-                  </div>
+                  <h3 className="line-clamp-2 text-center text-[12px] font-medium text-[var(--text-primary)]">
+  {category.name}
+</h3>
                 </div>
               </div>
             </Link>
