@@ -18,12 +18,12 @@ function getGalleryImages(product: Product, selectedVariant?: ProductVariant) {
     product.image,
   ];
 
-  return imageCandidates.filter(
-    (image, index, images) =>
-      typeof image === "string" &&
-      image.trim() !== "" &&
-      images.indexOf(image) === index
-  );
+ return imageCandidates.filter(
+  (image, index, images): image is string =>
+    typeof image === "string" &&
+    image.trim() !== "" &&
+    images.indexOf(image) === index
+);
 }
 
 export default function ProductImageGallery({
