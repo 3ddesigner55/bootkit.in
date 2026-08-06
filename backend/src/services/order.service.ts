@@ -11,6 +11,11 @@ import Product from '../models/product.model';
 import Store from '../models/store.model';
 import User from '../models/user.model';
 import type { ApiError } from '../types/api';
+import {
+  sendNotificationAsync,
+  sendOrderCancelledEmail,
+  sendOrderPlacedEmail,
+} from './notification.service';
 import type {
   CancelOrderInput,
   PlaceOrderInput,
@@ -41,6 +46,31 @@ function isDuplicateKeyError(error: unknown): boolean {
   );
 }
 
+function notifyOrderCancellation(userId: string, orderNumber: string): void {
+  sendNotificationAsync(
+    (async () => {
+      const user = await User.findOne({
+        _id: userId,
+        isActive: true,
+        deletedAt: null,
+      })
+        .select('email firstName')
+        .lean();
+
+      if (!user) {
+        return { sent: false, error: 'Notification recipient not found.' };
+      }
+
+      return sendOrderCancelledEmail({
+        email: user.email,
+        customerName: user.firstName,
+        orderNumber,
+      });
+    })(),
+    'order_cancelled',
+  );
+}
+
 export async function placeOrder(userId: string, input: PlaceOrderInput) {
   validateObjectId(input.addressId, 'Address');
   validateObjectId(input.storeId, 'Store');
@@ -50,12 +80,15 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
 
     try {
       let createdOrder: HydratedDocument<OrderDocument> | undefined;
+      let orderPlacedNotification:
+        | { email: string; customerName: string; orderNumber: string }
+        | undefined;
 
       await session.withTransaction(async () => {
         const [user, cart, address, store] = await Promise.all([
-          User.exists({ _id: userId, isActive: true, deletedAt: null }).session(
-            session,
-          ),
+          User.findOne({ _id: userId, isActive: true, deletedAt: null })
+            .select('email firstName')
+            .session(session),
           Cart.findOne({ user: userId }).session(session),
           Address.findOne({
             _id: input.addressId,
@@ -162,6 +195,19 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
           { session },
         );
 
+        if (!createdOrder) {
+          throw serviceError(
+            'Order could not be created.',
+            HTTP_STATUS.INTERNAL_SERVER_ERROR,
+          );
+        }
+
+        orderPlacedNotification = {
+          email: user.email,
+          customerName: user.firstName,
+          orderNumber: createdOrder.orderNumber,
+        };
+
         for (const item of orderItems) {
           const stockUpdate = await Product.updateOne(
             {
@@ -192,6 +238,13 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
         throw serviceError(
           'Order could not be created.',
           HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      if (orderPlacedNotification) {
+        sendNotificationAsync(
+          sendOrderPlacedEmail(orderPlacedNotification),
+          'order_placed',
         );
       }
 
@@ -269,8 +322,48 @@ export async function cancelOrder(
       );
     }
 
+    notifyOrderCancellation(userId, cancelledOrder.orderNumber);
+
     return cancelledOrder;
   } finally {
     await session.endSession();
   }
+}
+
+export async function confirmCodOrder(userId: string, orderNumber: string) {
+  const order = await Order.findOne({ orderNumber, user: userId });
+
+  if (!order) {
+    throw serviceError('Order not found.', HTTP_STATUS.NOT_FOUND);
+  }
+
+  if (order.paymentMethod !== 'COD') {
+    throw serviceError(
+      'This order does not use cash on delivery.',
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  if (order.paymentStatus !== 'PENDING') {
+    throw serviceError(
+      'Payment is not pending for this order.',
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  if (order.status !== 'PLACED') {
+    throw serviceError(
+      'This order cannot be confirmed.',
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  order.status = 'CONFIRMED';
+  await order.save();
+
+  return {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+  };
 }

@@ -17,18 +17,20 @@ export default function CategoryLayout({
     useState(slug);
 
   return (
-    <section className="grid h-[calc(100vh-64px)] grid-cols-[90px_1fr] overflow-hidden">
+    <section className="flex h-[calc(100vh-64px)] overflow-hidden bg-[#F5F7F5]">
 
       {/* LEFT */}
 
-      <CategorySidebar
-        selected={selectedCategory}
-        onSelect={setSelectedCategory}
-      />
+      <div className="h-full w-[90px] shrink-0">
+        <CategorySidebar
+          selected={selectedCategory}
+          onSelect={setSelectedCategory}
+        />
+      </div>
 
       {/* RIGHT */}
 
-      <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Filters */}
 

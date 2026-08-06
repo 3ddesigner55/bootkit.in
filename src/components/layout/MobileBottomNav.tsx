@@ -1,5 +1,5 @@
 "use client";
-
+import { useEffect, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -7,25 +7,24 @@ import {
   Grid2X2,
   Heart,
   Home,
-  ShoppingBag,
+  RotateCcw,
   UserRound,
 } from "lucide-react";
-import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
 import { cn } from "@/lib/utils";
+import ProductCollectionBottomSheet from "@/components/product/ProductCollectionBottomSheet";
+import { ORDER_AGAIN_CATEGORIES } from "@/components/home/bestSellerData";
+import { products } from "@/data/products";
 
 export default function MobileBottomNav() {
+  const [showNav, setShowNav] = useState(true);
+  const [orderAgainOpen, setOrderAgainOpen] = useState(false);
   const pathname = usePathname();
 
   const {
   unreadCount,
   hydrated: notificationsHydrated,
 } = useNotifications();
-
-  const {
-    totalItems: cartItems,
-    hydrated: cartHydrated,
-  } = useCart();
 
   const {
     totalItems: wishlistItems,
@@ -43,14 +42,43 @@ export default function MobileBottomNav() {
       pathname.startsWith(`${route}/`)
   );
 
+  useEffect(() => {
+  let lastScrollY = window.scrollY;
+
+  const handleScroll = () => {
+    const currentScrollY = window.scrollY;
+
+    if (currentScrollY > lastScrollY && currentScrollY > 100) {
+      // Scrolling down
+      setShowNav(false);
+    } else {
+      // Scrolling up
+      setShowNav(true);
+    }
+
+    lastScrollY = currentScrollY;
+  };
+
+  window.addEventListener("scroll", handleScroll);
+
+  return () =>
+    window.removeEventListener("scroll", handleScroll);
+}, []);
+
   if (shouldHide) return null;
 
   return (
-    <nav
-      aria-label="Mobile navigation"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-white/80 bg-white/95 shadow-[0_-10px_30px_rgba(15,23,18,0.12)] backdrop-blur-xl lg:hidden"
-    >
-      <div className="grid h-[64px] grid-cols-5 items-center px-1">
+    <>
+      <nav
+  aria-label="Mobile navigation"
+  className={cn(
+    "safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-white/80 bg-white/95 shadow-[0_-10px_30px_rgba(15,23,18,0.12)] backdrop-blur-xl transition-transform duration-300 lg:hidden",
+    showNav
+      ? "translate-y-0"
+      : "translate-y-full"
+  )}
+>
+      <div className="grid h-[64px] grid-cols-5 items-center px-2">
         <NavigationItem
           label="Home"
           href="/"
@@ -68,34 +96,11 @@ export default function MobileBottomNav() {
           }
         />
 
-        <Link
-          href="/cart"
-          aria-label={`Cart with ${
-            cartHydrated ? cartItems : 0
-          } items`}
-          className="relative -mt-7 flex flex-col items-center justify-center"
-        >
-          <span
-            className={cn(
-              "relative flex h-14 w-14 items-center justify-center rounded-[20px] border-4 border-white shadow-[0_10px_0_#0d3e28,0_16px_24px_rgba(12,64,39,.30)] transition active:translate-y-1 active:shadow-[0_5px_0_#0d3e28,0_9px_14px_rgba(12,64,39,.22)]",
-              pathname === "/cart"
-                ? "bg-[var(--primary-hover)] text-white"
-                : "bg-[var(--primary)] text-white"
-            )}
-          >
-            <ShoppingBag size={23} />
-
-            {cartHydrated && cartItems > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-[var(--accent)] px-1 text-[9px] font-black text-[var(--text-primary)]">
-                {cartItems > 99 ? "99+" : cartItems}
-              </span>
-            )}
-          </span>
-
-          <span className="mt-1 text-[9px] font-extrabold text-[var(--primary)]">
-            Cart
-          </span>
-        </Link>
+        <NavigationButton
+          label="Order Again"
+          icon={RotateCcw}
+          onClick={() => setOrderAgainOpen(true)}
+        />
 
         <NavigationItem
           label="Wishlist"
@@ -121,7 +126,18 @@ export default function MobileBottomNav() {
   }
 />
       </div>
-    </nav>
+      </nav>
+
+      <ProductCollectionBottomSheet
+        open={orderAgainOpen}
+        title="Order Again"
+        products={products.filter((product) => product.bestseller)}
+        categories={ORDER_AGAIN_CATEGORIES}
+        initialCategory="All"
+        showSearch
+        onClose={() => setOrderAgainOpen(false)}
+      />
+    </>
   );
 }
 
@@ -173,5 +189,30 @@ function NavigationItem({
         {label}
       </span>
     </Link>
+  );
+}
+
+type NavigationButtonProps = {
+  label: string;
+  icon: typeof Home;
+  onClick: () => void;
+};
+
+function NavigationButton({
+  label,
+  icon: Icon,
+  onClick,
+}: NavigationButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-full flex-col items-center justify-center gap-1 rounded-xl text-[var(--text-muted)] transition active:scale-95"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-soft)] shadow-[inset_0_1px_2px_rgba(15,23,18,.08)]">
+        <Icon size={20} strokeWidth={2} />
+      </span>
+      <span className="text-[9px] font-bold">{label}</span>
+    </button>
   );
 }

@@ -3,6 +3,26 @@ import type { NextFunction, Request, Response } from 'express';
 import { HTTP_STATUS } from '../constants/httpStatus';
 import type { ApiError } from '../types/api';
 
+export type ProductVariantInput = {
+  name: string;
+  sku: string;
+  barcode?: string;
+  color?: string;
+  size?: string;
+  weight?: string;
+  image?: string;
+  images?: string[];
+  attributes?: Record<string, string>;
+  unit: {
+    label: string;
+    value: string;
+  };
+  mrp: number;
+  price: number;
+  stock: number;
+  active: boolean;
+};
+
 export type ProductInput = {
   name: string;
   slug: string;
@@ -21,6 +41,9 @@ export type ProductInput = {
   trackInventory?: boolean;
   thumbnail?: string;
   gallery?: string[];
+  variants?: ProductVariantInput[];
+  tags?: string[];
+  fallbackIcon?: string;
   featured?: boolean;
   active?: boolean;
   showOnHome?: boolean;
@@ -162,6 +185,131 @@ function getOptionalGallery(
   return value.map((item) => item.trim());
 }
 
+function getRequiredVariantString(
+  input: Record<string, unknown>,
+  field: string,
+): string {
+  const value = input[field];
+
+  if (typeof value !== 'string' || !value.trim()) {
+    throw validationError(`variants.${field} is required.`);
+  }
+
+  return value.trim();
+}
+
+function getRequiredVariantNumber(
+  input: Record<string, unknown>,
+  field: string,
+): number {
+  const value = input[field];
+
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw validationError(
+      `variants.${field} is required and must be a non-negative number.`,
+    );
+  }
+
+  return value;
+}
+
+function getOptionalStringArray(
+  input: Record<string, unknown>,
+  field: string,
+): string[] | undefined {
+  const value = input[field];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw validationError(`${field} must be an array of strings.`);
+  }
+
+  return value.map((item) => item.trim());
+}
+
+function getOptionalAttributes(
+  input: Record<string, unknown>,
+): Record<string, string> | undefined {
+  const value = input.attributes;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw validationError('variants.attributes must be an object.');
+  }
+
+  const attributes = value as Record<string, unknown>;
+
+  if (Object.values(attributes).some((item) => typeof item !== 'string')) {
+    throw validationError('variants.attributes values must be strings.');
+  }
+
+  const stringAttributes = attributes as Record<string, string>;
+
+  return Object.fromEntries(
+    Object.entries(stringAttributes).map(([key, item]) => [key, item.trim()]),
+  );
+}
+
+function getOptionalVariants(
+  input: Record<string, unknown>,
+): ProductVariantInput[] | undefined {
+  const value = input.variants;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw validationError('variants must be an array.');
+  }
+
+  return value.map((item) => {
+    const variant = getObject(item);
+    const active = variant.active;
+
+    if (typeof active !== 'boolean') {
+      throw validationError(
+        'variants.active is required and must be a boolean.',
+      );
+    }
+
+    const unit = getObject(variant.unit);
+    const barcode = getOptionalString(variant, 'barcode');
+    const color = getOptionalString(variant, 'color');
+    const size = getOptionalString(variant, 'size');
+    const weight = getOptionalString(variant, 'weight');
+    const image = getOptionalString(variant, 'image');
+    const images = getOptionalStringArray(variant, 'images');
+    const attributes = getOptionalAttributes(variant);
+
+    return {
+      name: getRequiredVariantString(variant, 'name'),
+      sku: getRequiredVariantString(variant, 'sku'),
+      ...(barcode !== undefined ? { barcode } : {}),
+      ...(color !== undefined ? { color } : {}),
+      ...(size !== undefined ? { size } : {}),
+      ...(weight !== undefined ? { weight } : {}),
+      ...(image !== undefined ? { image } : {}),
+      ...(images !== undefined ? { images } : {}),
+      ...(attributes !== undefined ? { attributes } : {}),
+      unit: {
+        label: getRequiredVariantString(unit, 'label'),
+        value: getRequiredVariantString(unit, 'value'),
+      },
+      mrp: getRequiredVariantNumber(variant, 'mrp'),
+      price: getRequiredVariantNumber(variant, 'price'),
+      stock: getRequiredVariantNumber(variant, 'stock'),
+      active,
+    };
+  });
+}
+
 function getOptionalFields(
   input: Record<string, unknown>,
 ): Omit<ProductInput, 'name' | 'slug' | 'category' | 'sellingPrice' | 'stock'> {
@@ -177,6 +325,9 @@ function getOptionalFields(
   const trackInventory = getOptionalBoolean(input, 'trackInventory');
   const thumbnail = getOptionalString(input, 'thumbnail');
   const gallery = getOptionalGallery(input);
+  const variants = getOptionalVariants(input);
+  const tags = getOptionalStringArray(input, 'tags');
+  const fallbackIcon = getOptionalString(input, 'fallbackIcon');
   const featured = getOptionalBoolean(input, 'featured');
   const active = getOptionalBoolean(input, 'active');
   const showOnHome = getOptionalBoolean(input, 'showOnHome');
@@ -200,6 +351,9 @@ function getOptionalFields(
     ...(trackInventory !== undefined ? { trackInventory } : {}),
     ...(thumbnail !== undefined ? { thumbnail } : {}),
     ...(gallery !== undefined ? { gallery } : {}),
+    ...(variants !== undefined ? { variants } : {}),
+    ...(tags !== undefined ? { tags } : {}),
+    ...(fallbackIcon !== undefined ? { fallbackIcon } : {}),
     ...(featured !== undefined ? { featured } : {}),
     ...(active !== undefined ? { active } : {}),
     ...(showOnHome !== undefined ? { showOnHome } : {}),

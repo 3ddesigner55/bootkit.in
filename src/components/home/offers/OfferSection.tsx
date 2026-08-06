@@ -1,21 +1,21 @@
+import OfferBanner from "./OfferBanner";
 import OfferCard from "./OfferCard";
 import { OFFERS } from "./offerData";
 
+
 export default function OfferSection() {
   return (
-    <section className="mt-2">
+  <section className="relative mt-2">
+
 
       <div className="mb-4 flex items-center justify-between">
 
-        <h2 className="text-lg font-black">
-          Exclusive Offers
-        </h2>
-
-        
-
+      
       </div>
+<OfferBanner />
 
-      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+
+<div className="relative z-10 -mt-20 flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
 
         {OFFERS.map((offer) => (
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 
-import CategoryProductCard from "./CategoryProductCard";
+import ProductCard from "@/components/product/ProductCard";
 import CategoryEmpty from "./CategoryEmpty";
 
 import ProductBottomSheet from "@/components/product/ProductBottomSheet";
@@ -44,16 +44,17 @@ export default function CategoryProductGrid({
 
   return (
     <>
-      <div className="h-full overflow-y-auto p-4">
+      <div className="h-full overflow-y-auto scrollbar-hide bg-[#F5F7F5] p-4">
 
         <div className="grid grid-cols-2 gap-4">
 
           {products.map((product) => (
 
-            <CategoryProductCard
+            <ProductCard
               key={product.id}
               product={product}
-              onClick={(product) => {
+              variant="bestSellerPopup"
+              onClick={() => {
                 setSelectedProduct(product);
                 setProductOpen(true);
               }}

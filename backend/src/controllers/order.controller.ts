@@ -1,7 +1,11 @@
 import type { Request, Response } from 'express';
 
 import { HTTP_STATUS } from '../constants/httpStatus';
-import { cancelOrder, placeOrder } from '../services/order.service';
+import {
+  cancelOrder,
+  confirmCodOrder,
+  placeOrder,
+} from '../services/order.service';
 import { sendSuccess } from '../utils/apiResponse';
 import type {
   CancelOrderInput,
@@ -46,5 +50,22 @@ export async function cancelOrderController(
     HTTP_STATUS.OK,
     order,
     'Order cancelled successfully.',
+  );
+}
+
+export async function confirmCodOrderController(
+  request: Request,
+  response: Response,
+) {
+  const order = await confirmCodOrder(
+    request.user!.id,
+    response.locals.confirmCodOrderNumber as string,
+  );
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.OK,
+    order,
+    'Cash on delivery order confirmed successfully.',
   );
 }

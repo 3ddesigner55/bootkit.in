@@ -1,5 +1,25 @@
 import { model, models, Schema, type Types } from 'mongoose';
 
+export type ProductVariantDocument = {
+  name: string;
+  sku: string;
+  barcode?: string;
+  color?: string;
+  size?: string;
+  weight?: string;
+  image?: string;
+  images?: string[];
+  attributes?: Record<string, string>;
+  unit: {
+    label: string;
+    value: string;
+  };
+  mrp: number;
+  price: number;
+  stock: number;
+  active: boolean;
+};
+
 export type ProductDocument = {
   name: string;
   slug: string;
@@ -18,6 +38,9 @@ export type ProductDocument = {
   trackInventory: boolean;
   thumbnail: string;
   gallery: string[];
+  variants?: ProductVariantDocument[];
+  tags?: string[];
+  fallbackIcon?: string;
   featured: boolean;
   active: boolean;
   showOnHome: boolean;
@@ -32,6 +55,26 @@ export type ProductDocument = {
   deletedAt?: Date | null;
   deletedBy?: Types.ObjectId;
 };
+
+const productVariantSchema = new Schema<ProductVariantDocument>({
+  name: { type: String, required: true, trim: true },
+  sku: { type: String, required: true, trim: true },
+  barcode: { type: String, trim: true },
+  color: { type: String, trim: true },
+  size: { type: String, trim: true },
+  weight: { type: String, trim: true },
+  image: { type: String, trim: true },
+  images: { type: [String], default: undefined },
+  attributes: { type: Schema.Types.Mixed },
+  unit: {
+    label: { type: String, required: true, trim: true },
+    value: { type: String, required: true, trim: true },
+  },
+  mrp: { type: Number, required: true, min: 0 },
+  price: { type: Number, required: true, min: 0 },
+  stock: { type: Number, required: true, min: 0 },
+  active: { type: Boolean, required: true },
+});
 
 const productSchema = new Schema<ProductDocument>(
   {
@@ -52,6 +95,9 @@ const productSchema = new Schema<ProductDocument>(
     trackInventory: { type: Boolean, default: true },
     thumbnail: { type: String, default: '', trim: true },
     gallery: { type: [String], default: [] },
+    variants: { type: [productVariantSchema], default: undefined },
+    tags: { type: [String], default: undefined },
+    fallbackIcon: { type: String, trim: true },
     featured: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
     showOnHome: { type: Boolean, default: false },

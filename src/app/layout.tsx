@@ -23,6 +23,7 @@ import WalletProvider from "@/store/WalletProvider";
 import SellerProvider from "@/store/SellerProvider";
 import DeliveryPartnerProvider from "@/store/DeliveryPartnerProvider";
 import MobileCartBar from "@/components/layout/MobileCartBar";
+import { ThemeProvider } from "next-themes";
 
 
 export const metadata: Metadata = {
@@ -69,7 +70,7 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: "#165c3a",
-  colorScheme: "light",
+  colorScheme: "light dark",
 };
 
 export default function RootLayout({
@@ -78,8 +79,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-IN">
-      <body> 
+    <html lang="en-IN" suppressHydrationWarning>
+      <body>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
             <AccountProvider>
               <DeliveryPartnerProvider>
               <SellerProvider>
@@ -105,7 +112,7 @@ export default function RootLayout({
                              {children}
                            </div>
 
-                         <Footer />
+                         
                            <MobileBottomNav />
                            <MobileCartBar />
                      <AppInstallBanner />
@@ -130,6 +137,7 @@ export default function RootLayout({
 </AccountProvider>
        
       
+        </ThemeProvider>
       </body>
     </html>
   );

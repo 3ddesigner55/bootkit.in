@@ -78,7 +78,7 @@ const products = activeProducts.filter(
 
         {/* Header */}
 
-        <div className="flex items-center justify-between border-b px-5 py-4">
+        <div className="flex items-center justify-between px-5 py-4">
             <div>
 
 <h2 className="text-xl font-black">
@@ -108,14 +108,14 @@ const products = activeProducts.filter(
 
           {/* Sidebar */}
 
-          <div className="overflow-y-auto border-r bg-[#F6F8F6]">
+          <div className="overflow-y-auto bg-[#F6F8F6]">
 
             {activeCategories.map((category) => (
 
   <button
     key={category.id}
     onClick={() => setSelectedCategory(category.slug)}
-    className={`w-full border-b px-2 py-4 transition ${
+    className={`w-full px-2 py-4 transition ${
       currentCategory === category.slug
         ? "bg-white text-[var(--primary)]"
         : "bg-[#F6F8F6] text-gray-500"
@@ -205,6 +205,7 @@ const products = activeProducts.filter(
     onDecrease={() => decreaseItem(product.id)}
   />
 
+  
 )}
 
   </div>

@@ -98,3 +98,19 @@ export function validateCancelOrderRequest(
     next(error);
   }
 }
+
+export function validateConfirmCodRequest(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  const orderNumber = request.params.orderNumber;
+
+  if (Array.isArray(orderNumber) || !orderNumber?.trim()) {
+    next(validationError('orderNumber is required.'));
+    return;
+  }
+
+  response.locals.confirmCodOrderNumber = orderNumber.trim();
+  next();
+}

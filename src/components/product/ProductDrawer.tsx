@@ -17,6 +17,15 @@ export default function ProductDrawer({
 }: ProductDrawerProps) {
   if (!open || !product) return null;
 
+  const galleryImages = (product.images ?? []).filter(
+    (image) => typeof image === "string" && image.trim() !== ""
+  );
+  const imageSource =
+    galleryImages[0] ??
+    (typeof product.image === "string" && product.image.trim() !== ""
+      ? product.image
+      : null);
+
   return (
     <>
       {/* Overlay */}
@@ -61,13 +70,17 @@ export default function ProductDrawer({
 
             <div className="flex h-60 w-60 items-center justify-center rounded-3xl bg-[#f7f8fa]">
 
-              <Image
-                src={product.image}
-                alt={product.name}
-                width={220}
-                height={220}
-                className="object-contain"
-              />
+              {imageSource ? (
+                <Image
+                  src={imageSource}
+                  alt={product.name}
+                  width={220}
+                  height={220}
+                  className="object-contain"
+                />
+              ) : (
+                <span className="text-7xl">{product.fallbackIcon}</span>
+              )}
 
             </div>
 

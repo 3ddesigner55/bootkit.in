@@ -21,7 +21,7 @@ export default function CategorySidebar({
   }
 
   return (
-    <aside className="h-full overflow-y-auto bg-[#F5F7F5] border-r border-[#E8ECE8]">
+   <aside className="h-full overflow-y-auto scrollbar-hide bg-white">
 
       {activeCategories.map((category) => {
         const active = selected === category.slug;
@@ -32,8 +32,8 @@ export default function CategorySidebar({
             onClick={() => onSelect(category.slug)}
             className={`relative flex w-full flex-col items-center border-b border-[#ECEFEC] px-2 py-4 transition ${
               active
-                ? "bg-white"
-                : "bg-[#F5F7F5]"
+                ? "bg-[#F5F7F5]"
+                : "bg-white"
             }`}
           >
             {active && (
@@ -41,7 +41,7 @@ export default function CategorySidebar({
             )}
 
             <div
-              className={`mb-2 flex h-11 w-11 items-center justify-center rounded-xl text-xl transition ${
+              className={`mb-2 flex h-11 w-1 items-center justify-center rounded-xl text-xl transition ${
                 active
                   ? "bg-[#E9F8EE]"
                   : "bg-white"

@@ -8,6 +8,7 @@
       brand: "BootKiT Fresh",
       categorySlug: "dairy-breakfast",
       image: "/images/products/Dairy & Breakfast/cream milk.jpg",
+      images: ["/images/products/Dairy & Breakfast/cream milk.jpg"],
       variants: [],
       fallbackIcon: "🥛",
       unit: {
@@ -39,6 +40,13 @@
       brand: "Farm Fresh",
       categorySlug: "fruits-vegetables",
       image: "/images/products/Fruits/banana.png",
+       images: [
+  "/images/products/test/1.jpg",
+  "/images/products/test/2.jpg",
+  "/images/products/test/3.jpg",
+  "/images/products/test/4.jpg",
+],
+     
       fallbackIcon: "🍌",
       unit: {
         label: "1 kg",
@@ -61,7 +69,15 @@
       slug: "fresh-red-tomato-1kg",
       brand: "Farm Fresh",
       categorySlug: "fruits-vegetables",
-      image: "/images/products/Vegetables & Fruits/tomato.png",
+      image: "/images/products/test/1.jpg",
+
+images: [
+  "/images/products/test/1.jpg",
+  "/images/products/test/2.jpg",
+  "/images/products/test/3.jpg",
+  "/images/products/test/4.jpg",
+],
+      
       fallbackIcon: "🍅",
       unit: {
         label: "1 kg",
@@ -108,6 +124,7 @@
       brand: "CrunchBox",
       categorySlug: "snacks-munchies",
       image: "",
+      images: [],
       fallbackIcon: "🍟",
       unit: {
         label: "90 g",
@@ -154,6 +171,7 @@
       brand: "Golden Grain",
       categorySlug: "atta-rice-dal",
       image: "",
+      images: [],
       fallbackIcon: "🍚",
       unit: {
         label: "5 kg",
@@ -194,16 +212,16 @@
       description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_apple_1kg", name: "Royal Gala Apple", slug: "royal-gala-apple-1kg", brand: "Farm Fresh", categorySlug: "fruits-vegetables", image: "/images/products/Fruits/apple.jpg", fallbackIcon: "🍎", unit: { label: "1 kg", value: "1-kg" }, mrp: 220, price: 189, stock: 28, rating: 4.7, reviewCount: 96, deliveryMinutes: 15, featured: true, bestseller: true, active: true, description: "", thumbnail: "/images/products/Fruits/apple.jpg", gallery: ["/images/products/Fruits/apple.jpg"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_apple_1kg", name: "Royal Gala Apple", slug: "royal-gala-apple-1kg", brand: "Farm Fresh", categorySlug: "fruits-vegetables", image: "/images/products/Fruits/apple.jpg", images: ["/images/products/Fruits/apple.jpg"], fallbackIcon: "🍎", unit: { label: "1 kg", value: "1-kg" }, mrp: 220, price: 189, stock: 28, rating: 4.7, reviewCount: 96, deliveryMinutes: 15, featured: true, bestseller: true, active: true, description: "", thumbnail: "/images/products/Fruits/apple.jpg", gallery: ["/images/products/Fruits/apple.jpg"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_onion_1kg", name: "Fresh Red Onion", slug: "fresh-red-onion-1kg", brand: "Farm Fresh", categorySlug: "fruits-vegetables", image: "/images/products/Vegetables & Fruits/onion.png", fallbackIcon: "🧅", unit: { label: "1 kg", value: "1-kg" }, mrp: 48, price: 38, stock: 41, rating: 4.5, reviewCount: 72, deliveryMinutes: 15, featured: false, bestseller: true, active: true, description: "", thumbnail: "/images/products/Vegetables & Fruits/onion.png", gallery: ["/images/products/Vegetables & Fruits/onion.png"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_onion_1kg", name: "Fresh Red Onion", slug: "fresh-red-onion-1kg", brand: "Farm Fresh", categorySlug: "fruits-vegetables", image: "/images/products/Vegetables & Fruits/onion.png", images: ["/images/products/Vegetables & Fruits/onion.png"], fallbackIcon: "🧅", unit: { label: "1 kg", value: "1-kg" }, mrp: 48, price: 38, stock: 41, rating: 4.5, reviewCount: 72, deliveryMinutes: 15, featured: false, bestseller: true, active: true, description: "", thumbnail: "/images/products/Vegetables & Fruits/onion.png", gallery: ["/images/products/Vegetables & Fruits/onion.png"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
       id: "prd_spinach", name: "Fresh Spinach Bunch", slug: "fresh-spinach-bunch", brand: "Farm Fresh", categorySlug: "fruits-vegetables", image: "", fallbackIcon: "🥬", unit: { label: "250 g", value: "250-g" }, mrp: 35, price: 29, stock: 22, rating: 4.6, reviewCount: 38, deliveryMinutes: 15, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_eggs_12", name: "Farm Fresh Eggs", slug: "farm-fresh-eggs-12-pack", brand: "Happy Hen", categorySlug: "dairy-breakfast", image: "", fallbackIcon: "🥚", unit: { label: "12 pieces", value: "12-pieces" }, mrp: 110, price: 96, stock: 35, rating: 4.8, reviewCount: 142, deliveryMinutes: 15, featured: true, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_eggs_12", name: "Farm Fresh Eggs", slug: "farm-fresh-eggs-12-pack", brand: "Happy Hen", categorySlug: "dairy-breakfast", image: "", images: [], fallbackIcon: "🥚", unit: { label: "12 pieces", value: "12-pieces" }, mrp: 110, price: 96, stock: 35, rating: 4.8, reviewCount: 142, deliveryMinutes: 15, featured: true, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
       id: "prd_curd_400g", name: "Natural Set Curd", slug: "natural-set-curd-400g", brand: "BootKiT Fresh", categorySlug: "dairy-breakfast", image: "", fallbackIcon: "🥣", unit: { label: "400 g", value: "400-g" }, mrp: 65, price: 55, stock: 27, rating: 4.6, reviewCount: 84, deliveryMinutes: 15, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
@@ -221,22 +239,27 @@
       id: "prd_pav_bread", name: "Fresh Pav Bread", slug: "fresh-pav-bread-6-pack", brand: "Daily Bake", categorySlug: "bakery-biscuits", image: "", fallbackIcon: "🥖", unit: { label: "6 pieces", value: "6-pieces" }, mrp: 42, price: 36, stock: 26, rating: 4.4, reviewCount: 37, deliveryMinutes: 15, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_cola_750ml", name: "Sparkling Cola", slug: "sparkling-cola-750ml", brand: "FizzUp", categorySlug: "cold-drinks-juices", image: "", fallbackIcon: "🥤", unit: { label: "750 ml", value: "750-ml" }, mrp: 45, price: 40, stock: 38, rating: 4.5, reviewCount: 91, deliveryMinutes: 12, featured: false, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_cola_750ml", name: "Sparkling Cola", slug: "sparkling-cola-750ml", brand: "FizzUp", categorySlug: "cold-drinks-juices", image: "", images: [], fallbackIcon: "🥤", unit: { label: "750 ml", value: "750-ml" }, mrp: 45, price: 40, stock: 38, rating: 4.5, reviewCount: 91, deliveryMinutes: 12, featured: false, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_mango_juice", name: "Mango Fruit Drink", slug: "mango-fruit-drink-1l", brand: "FreshSip", categorySlug: "cold-drinks-juices", image: "", fallbackIcon: "🥭", unit: { label: "1 litre", value: "1-litre" }, mrp: 120, price: 99, stock: 23, rating: 4.6, reviewCount: 77, deliveryMinutes: 14, featured: true, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_mango_juice", name: "Mango Fruit Drink", slug: "mango-fruit-drink-1l", brand: "FreshSip", categorySlug: "cold-drinks-juices", image: "", fallbackIcon: "🥭", unit: { label: "1 litre", value: "1-litre" }, mrp: 120, price: 99, stock: 23, rating: 4.6, reviewCount: 77, deliveryMinutes: 14, featured: true, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,images: [
+  "/images/products/test/1.jpg",
+  "/images/products/test/2.jpg",
+  "/images/products/test/3.jpg",
+  "/images/products/test/4.jpg",
+],
     },
     {
       id: "prd_masoor_dal", name: "Premium Masoor Dal", slug: "premium-masoor-dal-1kg", brand: "Golden Grain", categorySlug: "atta-rice-dal", image: "", fallbackIcon: "🫘", unit: { label: "1 kg", value: "1-kg" }, mrp: 175, price: 149, stock: 20, rating: 4.7, reviewCount: 59, deliveryMinutes: 18, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_aashirvaad_atta", name: "Whole Wheat Atta", slug: "whole-wheat-atta-5kg", brand: "Golden Grain", categorySlug: "atta-rice-dal", image: "/images/products/atta.png", fallbackIcon: "🌾", unit: { label: "5 kg", value: "5-kg" }, mrp: 335, price: 298, stock: 17, rating: 4.8, reviewCount: 121, deliveryMinutes: 20, featured: true, bestseller: true, active: true, description: "", thumbnail: "/images/products/atta.png", gallery: ["/images/products/atta.png"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_aashirvaad_atta", name: "Whole Wheat Atta", slug: "whole-wheat-atta-5kg", brand: "Golden Grain", categorySlug: "atta-rice-dal", image: "/images/products/atta.png", images: ["/images/products/atta.png"], fallbackIcon: "🌾", unit: { label: "5 kg", value: "5-kg" }, mrp: 335, price: 298, stock: 17, rating: 4.8, reviewCount: 121, deliveryMinutes: 20, featured: true, bestseller: true, active: true, description: "", thumbnail: "/images/products/atta.png", gallery: ["/images/products/atta.png"], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
       id: "prd_sugar_1kg", name: "Refined Sugar", slug: "refined-sugar-1kg", brand: "SweetHome", categorySlug: "atta-rice-dal", image: "", fallbackIcon: "🧂", unit: { label: "1 kg", value: "1-kg" }, mrp: 58, price: 52, stock: 39, rating: 4.5, reviewCount: 44, deliveryMinutes: 17, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_instant_noodles", name: "Masala Instant Noodles", slug: "masala-instant-noodles-280g", brand: "QuickBite", categorySlug: "snacks-munchies", image: "", fallbackIcon: "🍜", unit: { label: "4 packs", value: "4-packs" }, mrp: 70, price: 62, stock: 48, rating: 4.7, reviewCount: 156, deliveryMinutes: 12, featured: true, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_instant_noodles", name: "Masala Instant Noodles", slug: "masala-instant-noodles-280g", brand: "QuickBite", categorySlug: "snacks-munchies", image: "", images: [], fallbackIcon: "🍜", unit: { label: "4 packs", value: "4-packs" }, mrp: 70, price: 62, stock: 48, rating: 4.7, reviewCount: 156, deliveryMinutes: 12, featured: true, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
       id: "prd_roasted_nuts", name: "Roasted Salted Peanuts", slug: "roasted-salted-peanuts-200g", brand: "CrunchBox", categorySlug: "snacks-munchies", image: "", fallbackIcon: "🥜", unit: { label: "200 g", value: "200-g" }, mrp: 85, price: 72, stock: 34, rating: 4.6, reviewCount: 68, deliveryMinutes: 12, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
@@ -251,7 +274,7 @@
       id: "prd_shampoo", name: "Smooth Care Shampoo", slug: "smooth-care-shampoo-340ml", brand: "Glow & Co.", categorySlug: "personal-care", image: "", fallbackIcon: "🧴", unit: { label: "340 ml", value: "340-ml" }, mrp: 210, price: 178, stock: 21, rating: 4.6, reviewCount: 88, deliveryMinutes: 18, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
-      id: "prd_toothpaste", name: "Fresh Mint Toothpaste", slug: "fresh-mint-toothpaste-150g", brand: "SmileBright", categorySlug: "personal-care", image: "", fallbackIcon: "🪥", unit: { label: "150 g", value: "150-g" }, mrp: 110, price: 92, stock: 37, rating: 4.7, reviewCount: 70, deliveryMinutes: 14, featured: false, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
+      id: "prd_toothpaste", name: "Fresh Mint Toothpaste", slug: "fresh-mint-toothpaste-150g", brand: "SmileBright", categorySlug: "personal-care", image: "", images: [], fallbackIcon: "🪥", unit: { label: "150 g", value: "150-g" }, mrp: 110, price: 92, stock: 37, rating: 4.7, reviewCount: 70, deliveryMinutes: 14, featured: false, bestseller: true, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,
     },
     {
       id: "prd_frozen_fries", name: "Classic French Fries", slug: "classic-french-fries-750g", brand: "Frosty", categorySlug: "frozen-food", image: "", fallbackIcon: "🍟", unit: { label: "750 g", value: "750-ml" }, mrp: 180, price: 155, stock: 16, rating: 4.5, reviewCount: 49, deliveryMinutes: 20, featured: false, bestseller: false, active: true, description: "", thumbnail: "", gallery: [], sku: "", barcode: "", showOnHome: false, displayOrder: 0,

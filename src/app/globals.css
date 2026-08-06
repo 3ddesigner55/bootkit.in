@@ -44,6 +44,38 @@
   --radius-full: 999px;
 }
 
+.dark {
+  --background: #111713;
+  --foreground: #eef5ed;
+
+  --surface: #19221b;
+  --surface-soft: #202b22;
+  --surface-muted: #29352b;
+
+  --primary: #61c983;
+  --primary-hover: #79d99a;
+  --primary-light: #1d3825;
+
+  --accent: #e1ba48;
+  --accent-light: #3d3212;
+
+  --text-primary: #eef5ed;
+  --text-secondary: #c2cec2;
+  --text-muted: #91a092;
+
+  --border: #314034;
+  --border-strong: #435246;
+
+  --success: #65d690;
+  --warning: #e8b64a;
+  --danger: #ef8383;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 4px 14px rgba(0, 0, 0, 0.16);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.24), 0 2px 7px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.32), 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -319,4 +351,14 @@ svg {
 
 .animate-float {
   animation: float 4s ease-in-out infinite;
+}
+
+/* Hide scrollbar but keep scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
