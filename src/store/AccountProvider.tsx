@@ -98,15 +98,16 @@ export default function AccountProvider({
 
   useEffect(() => {
     if (supabase) {
-      void supabase.auth.getUser().then(async ({ data: { user } }) => {
+      const client = supabase;
+      void client.auth.getUser().then(async ({ data: { user } }) => {
         if (!user || (!user.email && !user.phone)) { setHydrated(true); return; }
-        const { data } = await supabase.from("profiles").select("full_name, email, phone, role, created_at").eq("id", user.id).maybeSingle<SupabaseProfile>();
+        const { data } = await client.from("profiles").select("full_name, email, phone, role, created_at").eq("id", user.id).maybeSingle<SupabaseProfile>();
         const nextProfile = { fullName: data?.full_name || String(user.user_metadata.full_name || ""), email: data?.email || user.email || user.phone || "", phone: data?.phone || user.phone || String(user.user_metadata.phone || ""), dateOfBirth: "" };
         const role = data?.role || "CUSTOMER";
         setProfile(nextProfile);
         setSession({ email: user.email || user.phone || "", role, authenticatedAt: user.created_at });
         if (role === "OWNER") {
-          const { data: allProfiles } = await supabase.from("profiles").select("full_name, email, phone, role, created_at").order("created_at", { ascending: false });
+          const { data: allProfiles } = await client.from("profiles").select("full_name, email, phone, role, created_at").order("created_at", { ascending: false });
           setUsers((allProfiles || []).map((profile) => ({ profile: { fullName: profile.full_name, email: profile.email || profile.phone, phone: profile.phone, dateOfBirth: "" }, passwordHash: "", role: profile.role as UserRole, createdAt: profile.created_at })));
         }
         setHydrated(true);

@@ -27,6 +27,7 @@ export type ProductVariant = {
 };
 
 export type Product = {
+  description: string;
   id: string;
   name: string;
     
@@ -36,8 +37,11 @@ export type Product = {
   variants?:ProductVariant[];
   tags?: string[];
   image: string;
-
   images?: string[];
+  gallery: string[];
+  thumbnail?: string;
+  sku: string;
+  barcode: string;
 
   fallbackIcon: string;
 
@@ -54,5 +58,7 @@ export type Product = {
 
   featured: boolean;
   bestseller: boolean;
+  showOnHome: boolean;
+  displayOrder: number;
   active: boolean;
 };

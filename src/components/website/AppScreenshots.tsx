@@ -6,7 +6,7 @@ const screens = [
   {
     title: "Products",
     desc: "Browse thousands of groceries.",
-    image: "/images/app/product.png",
+    image: "/images/app/products.png",
   },
   {
     title: "Categories",
@@ -43,7 +43,7 @@ export default function AppScreenshots() {
 
         </div>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        <div className="mt-8 grid gap-6 lg:grid-cols-3">
 
           {screens.map((screen) => (
             <div
@@ -51,7 +51,7 @@ export default function AppScreenshots() {
               className="group text-center"
             >
 
-              <div className="mx-auto flex h-[400px] w-[200px] items-center justify-center rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)] transition duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl">
+              <div className="mx-auto flex h-[390px] w-[200px] items-center justify-center rounded-[28px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-lg)] transition duration-300 group-hover:-translate-y-2 group-hover:shadow-2xl">
 
                 <div className="flex h-full w-full items-center justify-center rounded-[22px] bg-[var(--surface-soft)]">
 
@@ -81,6 +81,8 @@ export default function AppScreenshots() {
           ))}
 
         </div>
+
+        
 
       </Container>
     </section>

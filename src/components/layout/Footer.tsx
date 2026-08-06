@@ -31,48 +31,47 @@ const companyLinks = [
 
 const customerLinks = [
   {
-    label: "My account",
-    href: "/account",
+    label: "Download App",
+    href: "#download",
   },
   {
-    label: "My orders",
-    href: "/orders",
-  },
-  {
-    label: "Cart",
-    href: "/cart",
-  },
-  {
-    label: "Help center",
+    label: "Help Center",
     href: "/help",
+  },
+  {
+    label: "FAQs",
+    href: "#faq",
+  },
+  {
+    label: "Delivery Areas",
+    href: "#",
   },
 ];
 
 const legalLinks = [
   {
-    label: "Privacy policy",
-    href: "/privacy",
+    label: "Privacy Policy",
+    href: "/privacy-policy",
   },
   {
-    label: "Terms and conditions",
+    label: "Terms & Conditions",
     href: "/terms",
   },
   {
-    label: "Return policy",
-    href: "/returns",
+    label: "Return Policy",
+    href: "/refund-policy",
   },
   {
-    label: "Shipping policy",
-    href: "/shipping",
+    label: "Shipping Policy",
+    href: "/shipping-policy",
   },
 ];
-
 export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-10 hidden border-t border-[var(--border)] bg-white lg:block">
-      <Container>
+<footer className="mt-10 border-t border-[var(--border)] bg-white">
+        <Container>
         <div className="grid gap-10 py-12 lg:grid-cols-[1.25fr_0.75fr_0.75fr_0.75fr]">
           <div>
             <Logo />
@@ -91,7 +90,7 @@ export default function Footer() {
                   <Phone size={16} />
                 </span>
 
-                +91 00000 00000
+                +91 8000093300
               </a>
 
               <a
@@ -102,7 +101,7 @@ export default function Footer() {
                   <Mail size={16} />
                 </span>
 
-                support@bootkit.local
+                support@bootkit.in
               </a>
 
               <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">

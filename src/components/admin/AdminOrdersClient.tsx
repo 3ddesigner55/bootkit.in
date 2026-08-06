@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import {
-  ArrowLeft,
   CheckCircle2,
   Clock3,
   Eye,
   MapPin,
   Package,
   RefreshCw,
-  Search,
   ShoppingBag,
   Truck,
   XCircle,
@@ -27,6 +25,11 @@ import {
 } from "@/lib/orders";
 import { formatPrice } from "@/lib/utils";
 import type { BootkitOrder } from "@/types/order";
+import AdminEmptyState from "@/components/admin/ui/AdminEmptyState";
+import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
+import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
+import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
+import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/ui/AdminStatusBadge";
 
 type OrderStatus = BootkitOrder["status"];
 
@@ -142,40 +145,22 @@ export default function AdminOrdersClient() {
 
       <main>
         <Container className="py-4 sm:py-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link
-                href="/"
-                aria-label="Back to home"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
+          <AdminPageHeader
+            title="Order management"
+            description="Manage orders saved on this device"
+            backHref="/"
+            backLabel="Back to home"
+            action={
+              <button
+                type="button"
+                onClick={loadOrders}
+                className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-black text-[var(--primary)]"
               >
-                <ArrowLeft size={19} />
-              </Link>
-
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--primary)]">
-                  Local admin
-                </p>
-
-                <h1 className="text-[24px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[31px]">
-                  Order management
-                </h1>
-
-                <p className="text-xs text-[var(--text-muted)]">
-                  Manage orders saved on this device
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={loadOrders}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-black text-[var(--primary)]"
-            >
-              <RefreshCw size={15} />
-              Refresh
-            </button>
-          </div>
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            }
+          />
 
           <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
@@ -205,21 +190,11 @@ export default function AdminOrdersClient() {
 
           <section className="mt-5 rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 focus-within:border-[var(--primary)]">
-                <Search
-                  size={17}
-                  className="text-[var(--text-muted)]"
-                />
-
-                <input
-                  value={query}
-                  onChange={(event) =>
-                    setQuery(event.target.value)
-                  }
-                  placeholder="Order, name, phone or pincode"
-                  className="h-full min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none"
-                />
-              </label>
+              <AdminSearchBar
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Order, name, phone or pincode"
+              />
 
               <select
                 value={statusFilter}
@@ -249,31 +224,14 @@ export default function AdminOrdersClient() {
           </section>
 
           {!hydrated ? (
-            <div className="mt-5 space-y-4">
-              {Array.from({ length: 4 }).map(
-                (_, index) => (
-                  <div
-                    key={index}
-                    className="h-52 animate-pulse rounded-[24px] bg-white"
-                  />
-                )
-              )}
-            </div>
+            <AdminLoadingSkeleton variant="list" count={4} className="mt-5" />
           ) : filteredOrders.length === 0 ? (
-            <section className="mt-5 flex min-h-[380px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white px-5 text-center">
-              <Package
-                size={38}
-                className="text-[var(--text-muted)]"
-              />
-
-              <h2 className="mt-4 text-xl font-black text-[var(--text-primary)]">
-                No matching orders
-              </h2>
-
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Orders placed from this browser will appear here.
-              </p>
-            </section>
+            <AdminEmptyState
+              title="No matching orders"
+              description="Orders placed from this browser will appear here."
+              icon={Package}
+              className="mt-5 min-h-[380px]"
+            />
           ) : (
             <div className="mt-5 space-y-4">
               {filteredOrders.map((order) => (
@@ -339,7 +297,11 @@ function AdminOrderCard({
           </p>
         </div>
 
-        <StatusBadge status={order.status} />
+        <AdminStatusBadge
+          label={order.status}
+          tone={statusTones[order.status]}
+          className="px-3 py-1.5"
+        />
       </div>
 
       <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -497,25 +459,11 @@ function StatCard({
   );
 }
 
-function StatusBadge({
-  status,
-}: {
-  status: OrderStatus;
-}) {
-  const styles: Record<OrderStatus, string> = {
-    Placed: "bg-blue-50 text-blue-700",
-    Confirmed: "bg-indigo-50 text-indigo-700",
-    Packing: "bg-amber-50 text-amber-700",
-    "Out for Delivery": "bg-purple-50 text-purple-700",
-    Delivered: "bg-green-50 text-green-700",
-    Cancelled: "bg-red-50 text-red-700",
-  };
-
-  return (
-    <span
-      className={`rounded-full px-3 py-1.5 text-[10px] font-black ${styles[status]}`}
-    >
-      {status}
-    </span>
-  );
-}
+const statusTones: Record<OrderStatus, AdminStatusTone> = {
+  Placed: "info",
+  Confirmed: "info",
+  Packing: "warning",
+  "Out for Delivery": "info",
+  Delivered: "success",
+  Cancelled: "danger",
+};

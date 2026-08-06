@@ -1,5 +1,5 @@
 "use client";
-
+import ProductDrawer from "./ProductDrawer";
 import Image from "next/image";
 import Link from "next/link";
 import { Clock3, Heart, Star } from "lucide-react";
@@ -18,7 +18,7 @@ export default function ProductCard({
   product,
 }: ProductCardProps) {
   const [imageFailed, setImageFailed] = useState(false);
-
+const [drawerOpen, setDrawerOpen] = useState(false);
   const {
     hydrated: cartHydrated,
     getQuantity,
@@ -47,14 +47,16 @@ export default function ProductCard({
   );
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-[20px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-xs)] transition duration-300 hover:-translate-y-1 hover:border-[var(--border-strong)] hover:shadow-[var(--shadow-md)] sm:p-4">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-[20px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-xs)] transition duration-300 hover:-translate-y-2 hover:border-[var(--border-strong)] hover:shadow-xl sm:p-4">
       <div className="relative">
-        <Link
-          href={`/product/${product.slug}`}
-          aria-label={`View ${product.name}`}
+        f
+         <button
+  type="button"
+  onClick={() => setDrawerOpen(true)}
+  aria-label={`View ${product.name}`}
           className="block overflow-hidden rounded-[16px] bg-[var(--surface-soft)]"
         >
-          <div className="relative flex aspect-square items-center justify-center overflow-hidden">
+          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-[#F7F8FA]">
             {product.image && !imageFailed ? (
               <Image
                 src={product.image}
@@ -73,7 +75,7 @@ export default function ProductCard({
               </span>
             )}
           </div>
-        </Link>
+        </button>
 
         {discount > 0 && (
           <span className="absolute left-2 top-2 rounded-lg bg-[var(--primary)] px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white">
@@ -90,7 +92,7 @@ export default function ProductCard({
               ? "Remove from wishlist"
               : "Add to wishlist"
           }
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[var(--text-secondary)] shadow-sm backdrop-blur transition hover:text-[var(--danger)] disabled:opacity-50"
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl border border-white/70 bg-white/90 text-[var(--text-secondary)] shadow-sm backdrop-blur transition hover:text-[var(--danger)] disabled:opacity-50"
         >
           <Heart
             size={16}
@@ -101,7 +103,7 @@ export default function ProductCard({
           />
         </button>
 
-        <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-lg bg-white/90 px-2 py-1 text-[9px] font-bold text-[var(--text-secondary)] shadow-sm backdrop-blur">
+        <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-white px-2 py-1 text-[10px] font-bold text-[var(--text-primary)] shadow">
           <Clock3
             size={11}
             className="text-[var(--primary)]"
@@ -130,18 +132,24 @@ export default function ProductCard({
           </span>
 
           <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--text-secondary)]">
-            <Star
-              size={12}
-              fill="currentColor"
-              className="text-[var(--accent)]"
-            />
+           <div className="flex items-center gap-1 rounded-full bg-[#FFF7E0] px-2 py-1">
+  <Star
+    size={11}
+    fill="currentColor"
+    className="text-[#F59E0B]"
+  />
+
+  <span className="text-[10px] font-bold">
+    {product.rating}
+  </span>
+</div>
             {product.rating}
           </span>
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-2 pt-4">
           <div className="min-w-0">
-            <p className="text-[15px] font-black tracking-[-0.025em] text-[var(--text-primary)] sm:text-base">
+            <p className="text-[18px] font-black tracking-[-0.025em] text-[var(--text-primary)] sm:text-base">
               {formatPrice(product.price)}
             </p>
 
@@ -159,7 +167,7 @@ export default function ProductCard({
               disabled={
                 !cartHydrated || product.stock <= 0
               }
-              className="h-10 min-w-[76px] rounded-xl border border-[var(--primary)] px-4 text-xs font-black uppercase tracking-[0.06em] text-[var(--primary)] transition hover:bg-[var(--primary)] hover:text-white disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--text-muted)]"
+              className="h-10 min-w-[82px] rounded-xl bg-[var(--primary)] text-xs font-black uppercase tracking-[0.06em] text-white transition hover:scale-105 hover:bg-green-700"
             >
               {product.stock > 0 ? "Add" : "Out"}
             </button>
@@ -177,6 +185,12 @@ export default function ProductCard({
           )}
         </div>
       </div>
+
+      <ProductDrawer
+  open={drawerOpen}
+  product={product}
+  onClose={() => setDrawerOpen(false)}
+/>
     </article>
   );
 }

@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import {
-  ArrowLeft,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -11,7 +9,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -23,9 +20,16 @@ import {
 } from "react";
 import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
+import { ImageUploader } from "@/components/admin/media";
 import { useAdminCategories } from "@/hooks/useAdminCategories";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 import type { Category } from "@/types/category";
+import AdminEmptyState from "@/components/admin/ui/AdminEmptyState";
+import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
+import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
+import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
+import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
+import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
 
 type CategoryFilter = "All" | "Active" | "Inactive";
 
@@ -33,20 +37,50 @@ type CategoryForm = {
   name: string;
   slug: string;
   description: string;
+
   icon: string;
+
+  image: string;
+
+  banner: string;
+
   background: string;
+
   sortOrder: string;
+
+  featured: boolean;
+
   active: boolean;
+  showOnHome: boolean;
+
+homeLayout: "grid" | "slider";
+
+displayOrder: string;
 };
 
 const emptyForm: CategoryForm = {
   name: "",
   slug: "",
   description: "",
+
   icon: "📦",
+
+  image: "",
+
+  banner: "",
+
   background: "#F2F5EF",
+
   sortOrder: "1",
+
+  featured: false,
+
   active: true,
+  showOnHome: true,
+
+homeLayout: "grid",
+
+displayOrder: "1",
 };
 
 function createSlug(value: string) {
@@ -57,15 +91,33 @@ function createSlug(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-function categoryToForm(category: Category): CategoryForm {
+function categoryToForm(
+  category: Category
+): CategoryForm {
+
   return {
     name: category.name,
     slug: category.slug,
     description: category.description,
+
     icon: category.icon,
+
+    image: category.image ?? "",
+
+    banner: category.banner ?? "",
+
     background: category.background,
+
     sortOrder: String(category.sortOrder),
+
+    featured: category.featured,
+
     active: category.active,
+    showOnHome: category.showOnHome,
+
+homeLayout: category.homeLayout,
+
+displayOrder: String(category.displayOrder),
   };
 }
 
@@ -213,7 +265,10 @@ export default function AdminCategoriesClient() {
 
     let nextValue = value;
 
-    if (name === "sortOrder") {
+    if (
+      name === "sortOrder" ||
+      name === "displayOrder"
+    ) {
       nextValue = value.replace(/\D/g, "");
     }
 
@@ -265,12 +320,20 @@ export default function AdminCategoriesClient() {
     }
 
     const sortOrder = Number(form.sortOrder);
+    const displayOrder = Number(form.displayOrder);
 
     if (
       !Number.isInteger(sortOrder) ||
       sortOrder < 0
     ) {
       return "Sort order must be a valid whole number.";
+    }
+
+    if (
+      !Number.isInteger(displayOrder) ||
+      displayOrder < 0
+    ) {
+      return "Display order must be a valid whole number.";
     }
 
     return "";
@@ -296,25 +359,27 @@ export default function AdminCategoriesClient() {
       background: form.background.trim(),
       sortOrder: Number(form.sortOrder),
       active: form.active,
+      image: form.image.trim(),
+      banner: form.banner.trim(),
+      featured: form.featured,
+      showOnHome: form.showOnHome,
+
+homeLayout: form.homeLayout,
+
+displayOrder: Number(form.displayOrder),
     };
 
     if (editingCategory) {
-      updateCategory(editingCategory.id, {
-        ...categoryData,
-        productCount:
-          categoryProductCounts[
-            editingCategory.slug
-          ] ?? 0,
-      });
+      updateCategory(
+        editingCategory.id,
+        categoryData
+      );
 
       setMessage(
         `${categoryData.name} updated successfully.`
       );
     } else {
-      addCategory({
-        ...categoryData,
-        productCount: 0,
-      });
+      addCategory(categoryData);
 
       setMessage(
         `${categoryData.name} added successfully.`
@@ -387,7 +452,7 @@ export default function AdminCategoriesClient() {
         <Header />
 
         <Container className="py-6">
-          <div className="h-[620px] animate-pulse rounded-[28px] bg-white" />
+          <AdminLoadingSkeleton variant="page" />
         </Container>
       </div>
     );
@@ -399,51 +464,29 @@ export default function AdminCategoriesClient() {
 
       <main>
         <Container className="py-4 sm:py-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link
-                href="/admin"
-                aria-label="Back to admin"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
-              >
-                <ArrowLeft size={19} />
-              </Link>
-
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--primary)]">
-                  Local admin
-                </p>
-
-                <h1 className="text-[24px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[31px]">
-                  Category management
-                </h1>
-
-                <p className="text-xs text-[var(--text-muted)]">
-                  Add, edit and control store categories
-                </p>
+          <AdminPageHeader
+            title="Category management"
+            description="Add, edit and control store categories"
+            action={
+              <div className="flex items-center gap-2">
+                <AdminPrimaryButton
+                  icon={<Plus size={15} />}
+                  onClick={openAddForm}
+                  className="px-3 text-[11px]"
+                >
+                  Add
+                </AdminPrimaryButton>
+                <button
+                  type="button"
+                  onClick={confirmReset}
+                  className="flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-[11px] font-black text-[var(--danger)]"
+                >
+                  <RefreshCw size={15} />
+                  Reset
+                </button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openAddForm}
-                className="flex h-10 items-center gap-2 rounded-xl bg-[var(--primary)] px-3 text-[11px] font-black text-white"
-              >
-                <Plus size={15} />
-                Add
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmReset}
-                className="flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-[11px] font-black text-[var(--danger)]"
-              >
-                <RefreshCw size={15} />
-                Reset
-              </button>
-            </div>
-          </div>
+            }
+          />
 
           {message && (
             <div className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs font-bold text-[var(--success)]">
@@ -523,6 +566,59 @@ export default function AdminCategoriesClient() {
                     onChange={updateField}
                     required
                   />
+                  <ImageUploader
+                    label="Category Image"
+                    value={
+                      form.image
+                        ? [
+                            {
+                              id: "category-image",
+                              url: form.image,
+                              name: "Category image",
+                              progress: form.image.startsWith("blob:")
+                                ? 0
+                                : 100,
+                              status: form.image.startsWith("blob:")
+                                ? "ready"
+                                : "uploaded",
+                            },
+                          ]
+                        : []
+                    }
+                    onChange={(items) =>
+                      setForm((current) => ({
+                        ...current,
+                        image: items[0]?.url ?? "",
+                      }))
+                    }
+                  />
+
+                  <ImageUploader
+                    label="Category Banner"
+                    value={
+                      form.banner
+                        ? [
+                            {
+                              id: "category-banner",
+                              url: form.banner,
+                              name: "Category banner",
+                              progress: form.banner.startsWith("blob:")
+                                ? 0
+                                : 100,
+                              status: form.banner.startsWith("blob:")
+                                ? "ready"
+                                : "uploaded",
+                            },
+                          ]
+                        : []
+                    }
+                    onChange={(items) =>
+                      setForm((current) => ({
+                        ...current,
+                        banner: items[0]?.url ?? "",
+                      }))
+                    }
+                  />
 
                   <CategoryField
                     label="Sort order"
@@ -533,6 +629,52 @@ export default function AdminCategoriesClient() {
                     onChange={updateField}
                     required
                   />
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+  <input
+    type="checkbox"
+    checked={form.showOnHome}
+    onChange={(e) =>
+      setForm((prev) => ({
+        ...prev,
+        showOnHome: e.target.checked,
+      }))
+    }
+  />
+
+  <span className="text-sm font-medium">
+    Show on Home Page
+  </span>
+</div>
+
+<div className="space-y-2">
+  <label className="text-sm font-medium">
+    Home Layout
+  </label>
+
+  <select
+    value={form.homeLayout}
+    onChange={(e) =>
+      setForm((prev) => ({
+        ...prev,
+        homeLayout: e.target.value as
+          "grid" | "slider",
+      }))
+    }
+    className="w-full rounded-xl border border-gray-300 px-3 py-2"
+  >
+    <option value="grid">Grid</option>
+    <option value="slider">Slider</option>
+  </select>
+</div>
+
+<CategoryField
+  label="Display Order"
+  name="displayOrder"
+  value={form.displayOrder}
+  placeholder="1"
+  inputMode="numeric"
+  onChange={updateField}
+/>
 
                   <label className="flex items-end">
                     <span className="flex h-12 w-full items-center justify-between rounded-xl bg-[var(--surface-soft)] px-4">
@@ -553,6 +695,33 @@ export default function AdminCategoriesClient() {
                           setForm((current) => ({
                             ...current,
                             active:
+                              event.target.checked,
+                          }))
+                        }
+                        className="h-4 w-4 accent-[var(--primary)]"
+                      />
+                    </span>
+                  </label>
+
+                  <label className="flex items-end">
+                    <span className="flex h-12 w-full items-center justify-between rounded-xl bg-[var(--surface-soft)] px-4">
+                      <span>
+                        <span className="block text-xs font-black text-[var(--text-primary)]">
+                          Featured category
+                        </span>
+
+                        <span className="text-[9px] text-[var(--text-muted)]">
+                          Highlight this category
+                        </span>
+                      </span>
+
+                      <input
+                        type="checkbox"
+                        checked={form.featured}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            featured:
                               event.target.checked,
                           }))
                         }
@@ -612,15 +781,15 @@ export default function AdminCategoriesClient() {
                 )}
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <button
+                  <AdminPrimaryButton
                     type="submit"
-                    className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-sm font-black text-white"
+                    icon={<Save size={17} />}
+                    className="h-12 flex-1 rounded-2xl text-sm"
                   >
-                    <Save size={17} />
                     {editingCategory
                       ? "Update category"
                       : "Save category"}
-                  </button>
+                  </AdminPrimaryButton>
 
                   <button
                     type="button"
@@ -658,21 +827,11 @@ export default function AdminCategoriesClient() {
 
           <section className="mt-5 rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
-              <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3">
-                <Search
-                  size={17}
-                  className="text-[var(--text-muted)]"
-                />
-
-                <input
-                  value={query}
-                  onChange={(event) =>
-                    setQuery(event.target.value)
-                  }
-                  placeholder="Search category"
-                  className="h-full min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none"
-                />
-              </label>
+              <AdminSearchBar
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search category"
+              />
 
               <select
                 value={filter}
@@ -698,16 +857,11 @@ export default function AdminCategoriesClient() {
           </section>
 
           {filteredCategories.length === 0 ? (
-            <section className="mt-5 flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white text-center">
-              <Grid2X2
-                size={38}
-                className="text-[var(--text-muted)]"
-              />
-
-              <h2 className="mt-4 text-xl font-black text-[var(--text-primary)]">
-                No matching categories
-              </h2>
-            </section>
+            <AdminEmptyState
+              title="No matching categories"
+              icon={Grid2X2}
+              className="mt-5"
+            />
           ) : (
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredCategories.map(
@@ -715,7 +869,7 @@ export default function AdminCategoriesClient() {
                   <CategoryCard
                     key={category.id}
                     category={category}
-                    productCount={
+                    assignedProducts={
                       categoryProductCounts[
                         category.slug
                       ] ?? 0
@@ -746,13 +900,13 @@ export default function AdminCategoriesClient() {
 
 function CategoryCard({
   category,
-  productCount,
+  assignedProducts,
   onEdit,
   onToggleActive,
   onDelete,
 }: {
   category: Category;
-  productCount: number;
+  assignedProducts: number;
   onEdit: () => void;
   onToggleActive: () => void;
   onDelete: () => void;
@@ -788,17 +942,11 @@ function CategoryCard({
               </p>
             </div>
 
-            <span
-              className={`rounded-full px-2.5 py-1 text-[9px] font-black ${
-                category.active
-                  ? "bg-green-50 text-[var(--success)]"
-                  : "bg-red-50 text-[var(--danger)]"
-              }`}
-            >
-              {category.active
-                ? "Active"
-                : "Inactive"}
-            </span>
+            <AdminStatusBadge
+              label={category.active ? "Active" : "Inactive"}
+              tone={category.active ? "success" : "danger"}
+              className="text-[9px]"
+            />
           </div>
 
           <p className="mt-3 line-clamp-2 text-[11px] leading-5 text-[var(--text-secondary)]">
@@ -810,7 +958,7 @@ function CategoryCard({
       <div className="grid grid-cols-2 divide-x divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface-soft)]">
         <div className="p-3 text-center">
           <p className="text-sm font-black text-[var(--text-primary)]">
-            {productCount}
+            {assignedProducts}
           </p>
 
           <p className="mt-1 text-[9px] text-[var(--text-muted)]">

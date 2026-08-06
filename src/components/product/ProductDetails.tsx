@@ -219,6 +219,24 @@ if (!productsHydrated) {
                     title="Easy support"
                   />
                 </div>
+
+<div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-4">
+  <div className="flex flex-wrap gap-2">
+    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+      ❄️ Chilled
+    </span>
+
+    <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
+      🍋 Flavour
+    </span>
+
+    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+      📅 120 Days
+    </span>
+  </div>
+</div>
+
+
               </div>
 
               <div className="p-4 sm:p-6 lg:p-8">
@@ -230,27 +248,17 @@ if (!productsHydrated) {
                   {product.name}
                 </h1>
 
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <span className="flex items-center gap-1.5 rounded-full bg-[var(--primary-light)] px-3 py-1.5 text-xs font-black text-[var(--primary)]">
-                    <Star
-                      size={14}
-                      fill="currentColor"
-                      className="text-[var(--accent)]"
-                    />
-                    {product.rating}
-                  </span>
+                <div className="mt-3 flex items-center justify-between">
+  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+    <Clock3 size={16} className="text-green-600" />
+    <span>{product.deliveryMinutes} mins</span>
+  </div>
 
-                  <span className="text-xs font-semibold text-[var(--text-muted)]">
-                    {product.reviewCount} customer reviews
-                  </span>
-
-                  {product.bestseller && (
-                    <span className="flex items-center gap-1 rounded-full bg-[var(--accent-light)] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.06em] text-[var(--warning)]">
-                      <BadgeCheck size={13} />
-                      Bestseller
-                    </span>
-                  )}
-                </div>
+  <div className="flex items-center gap-1 text-sm font-semibold">
+    <Star size={16} fill="currentColor" className="text-yellow-500" />
+    <span>{product.rating}</span>
+  </div>
+</div>
 
                 <div className="mt-6 flex items-end gap-3">
                   <span className="text-[30px] font-black tracking-[-0.04em] text-[var(--text-primary)]">
@@ -297,8 +305,54 @@ if (!productsHydrated) {
 <ProductStock product={product} stock={selectedStock} label={selectedVariant?.unit.label ?? product.unit.label} />
 <ProductVariantSelector product={product} onChange={setSelectedVariant} />
 <ProductOffers />
-<ProductSeller />
+<div className="mt-6 rounded-2xl border border-[var(--border)] bg-white p-4">
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="text-xs text-gray-500">Brand</p>
 
+      <h3 className="mt-1 text-base font-bold">
+        {product.brand}
+      </h3>
+    </div>
+
+    <Link
+      href={`/brand/${product.brand.toLowerCase().replace(/\s+/g, "-")}`}
+      className="text-sm font-semibold text-green-600"
+    >
+      Explore all products →
+    </Link>
+  </div>
+</div>
+
+ <ProductSeller />
+                   
+                   <div className="mt-4 rounded-2xl border border-[var(--border)] bg-white">
+  <button
+    type="button"
+    className="flex w-full items-center justify-between p-4"
+  >
+    <div className="flex items-center gap-3">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50">
+        📦
+      </span>
+
+      <div>
+        <p className="font-semibold text-gray-900">
+          72 Hours Replacement
+        </p>
+
+        <p className="text-xs text-gray-500">
+          Easy replacement for damaged products
+        </p>
+      </div>
+    </div>
+
+    <ChevronRight
+      size={18}
+      className="text-gray-400"
+    />
+  </button>
+</div>
 
                 <button
                   type="button"

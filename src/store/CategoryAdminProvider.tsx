@@ -47,9 +47,17 @@ function isCategory(
     typeof category.description === "string" &&
     typeof category.icon === "string" &&
     typeof category.background === "string" &&
-    typeof category.productCount === "number" &&
+    (category.image === undefined ||
+      typeof category.image === "string") &&
+    (category.banner === undefined ||
+      typeof category.banner === "string") &&
+    typeof category.featured === "boolean" &&
     typeof category.active === "boolean" &&
-    typeof category.sortOrder === "number"
+    typeof category.sortOrder === "number" &&
+    typeof category.showOnHome === "boolean" &&
+    (category.homeLayout === "grid" ||
+      category.homeLayout === "slider") &&
+    typeof category.displayOrder === "number"
   );
 }
 
@@ -137,20 +145,33 @@ function sanitizeCategory(
     background:
       category.background.trim() ||
       "#F2F5EF",
-    productCount: Math.max(
-      Math.floor(
-        Number(category.productCount) || 0
-      ),
-      0
-    ),
+    image: category.image?.trim() || undefined,
+    banner: category.banner?.trim() || undefined,
     sortOrder: Math.max(
       Math.floor(
         Number(category.sortOrder) || 0
       ),
       0
     ),
+    featured: category.featured ?? false,
+    showOnHome: category.showOnHome ?? false,
+
+homeLayout:
+  category.homeLayout === "slider"
+    ? "slider"
+    : "grid",
+
+displayOrder: Math.max(
+  Math.floor(
+    Number(category.displayOrder) || 0
+  ),
+  0
+),
   };
+  
 }
+
+
 
 export default function CategoryAdminProvider({
   children,
@@ -234,12 +255,18 @@ export default function CategoryAdminProvider({
           current
         );
 
-        createdCategory =
-          sanitizeCategory({
-            ...input,
-            id: categoryId,
-            slug,
-          } as Category);
+       createdCategory =
+  sanitizeCategory({
+    ...input,
+    id: categoryId,
+    slug,
+
+    featured: input.featured ?? false,
+    showOnHome: input.showOnHome ?? false,
+    homeLayout: input.homeLayout ?? "grid",
+    displayOrder: input.displayOrder ?? 0,
+
+  } as Category);
 
         return [
           createdCategory,

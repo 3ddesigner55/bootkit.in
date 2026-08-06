@@ -26,22 +26,40 @@ import MobileCartBar from "@/components/layout/MobileCartBar";
 
 
 export const metadata: Metadata = {
-  title: {
-    default: "BootKiT — Fast Local Delivery",
-    template: "%s | BootKiT",
-  },
+  title: "BootKiT | Fast Grocery Delivery App",
   description:
-    "BootKiT is a premium local quick-commerce app for groceries and daily essentials.",
-  applicationName: "BootKiT",
-  appleWebApp: {
-    capable: true,
+    "BootKiT delivers groceries, fruits, vegetables and daily essentials in 10–20 minutes from trusted local stores.",
+
+  keywords: [
+    "BootKiT",
+    "Grocery Delivery",
+    "Quick Commerce",
+    "Groceries",
+    "Fresh Vegetables",
+    "Online Grocery",
+  ],
+
+  authors: [{ name: "BootKiT" }],
+
+  creator: "BootKiT",
+
+  metadataBase: new URL("https://bootkit.in"),
+
+  openGraph: {
     title: "BootKiT",
-    statusBarStyle: "black-translucent",
+    description:
+      "Fast grocery delivery in minutes.",
+    url: "https://bootkit.in",
+    siteName: "BootKiT",
+    locale: "en_IN",
+    type: "website",
   },
-  formatDetection: {
-    telephone: false,
-    email: false,
-    address: false,
+
+  twitter: {
+    card: "summary_large_image",
+    title: "BootKiT",
+    description:
+      "Fast Grocery Delivery App",
   },
 };
 

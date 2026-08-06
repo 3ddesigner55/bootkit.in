@@ -1,5 +1,10 @@
 "use client";
 
+import Image from "next/image";
+import { X } from "lucide-react";
+import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { useAdminCategories } from "@/hooks/useAdminCategories";
+import { formatPrice } from "@/lib/utils";
 import {
   createContext,
   useCallback,
@@ -19,6 +24,8 @@ import { supabase } from "@/lib/supabase/client";
 export const ProductAdminContext =
   createContext<ProductAdminContextValue | null>(null);
 
+ 
+
 const STORAGE_KEY = "bootkit_admin_products_v1";
 
 type DatabaseProduct = {
@@ -26,7 +33,7 @@ type DatabaseProduct = {
 };
 
 function fromDatabaseProduct(product: DatabaseProduct): Product {
-  return { id: product.id, name: product.name, slug: product.slug, brand: product.brand, categorySlug: product.category_slug, image: product.image_url || "", fallbackIcon: product.fallback_icon, unit: { label: product.unit_label, value: product.unit_value }, mrp: Number(product.mrp), price: Number(product.price), stock: product.stock, rating: Number(product.rating), reviewCount: product.review_count, deliveryMinutes: product.delivery_minutes, featured: product.featured, bestseller: product.bestseller, active: product.active, variants: [] };
+  return { id: product.id, name: product.name, slug: product.slug, brand: product.brand, categorySlug: product.category_slug, image: product.image_url || "", fallbackIcon: product.fallback_icon, unit: { label: product.unit_label, value: product.unit_value }, mrp: Number(product.mrp), price: Number(product.price), stock: product.stock, rating: Number(product.rating), reviewCount: product.review_count, deliveryMinutes: product.delivery_minutes, featured: product.featured, bestseller: product.bestseller, active: product.active, description: "", gallery: product.image_url ? [product.image_url] : [], thumbnail: product.image_url || "", sku: "", barcode: "", showOnHome: false, displayOrder: 0, variants: [] };
 }
 
 function toDatabaseProduct(product: Product) {
@@ -66,6 +73,14 @@ function isProduct(value: unknown): value is Product {
     typeof product.brand === "string" &&
     typeof product.categorySlug === "string" &&
     typeof product.image === "string" &&
+    typeof product.description === "string" &&
+    Array.isArray(product.gallery) &&
+    product.gallery.every((image) => typeof image === "string") &&
+    (product.thumbnail === undefined || typeof product.thumbnail === "string") &&
+    typeof product.sku === "string" &&
+    typeof product.barcode === "string" &&
+    typeof product.showOnHome === "boolean" &&
+    typeof product.displayOrder === "number" &&
     
 (
   product.images === undefined ||
@@ -216,6 +231,13 @@ images:
     brand: product.brand.trim(),
     categorySlug: product.categorySlug.trim(),
     image: product.image.trim(),
+    description: product.description.trim(),
+    gallery: product.gallery.filter((image) => image.trim() !== ""),
+    thumbnail: product.thumbnail?.trim() || "",
+    sku: product.sku.trim(),
+    barcode: product.barcode.trim(),
+    showOnHome: product.showOnHome,
+    displayOrder: Math.max(Math.floor(Number(product.displayOrder) || 0), 0),
     fallbackIcon:
       product.fallbackIcon.trim() || "📦",
     unit: {

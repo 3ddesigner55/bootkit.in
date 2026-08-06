@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  ArrowLeft,
   BadgeCheck,
   Boxes,
   CheckCircle2,
@@ -13,7 +12,6 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Search,
   Star,
   Trash2,
   TrendingUp,
@@ -27,10 +25,17 @@ import {
 } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
+import { ImageUploader } from "@/components/admin/media";
 import { getActiveCategories } from "@/data/categories";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/types/product";
+import AdminEmptyState from "@/components/admin/ui/AdminEmptyState";
+import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
+import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
+import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
+import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
+import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
 
 type ProductFilter =
   | "All"
@@ -40,7 +45,7 @@ type ProductFilter =
   | "Featured"
   | "Bestseller";
 
-type ProductEditForm = {
+  type ProductEditForm = {
   name: string;
   brand: string;
   categorySlug: string;
@@ -54,6 +59,13 @@ type ProductEditForm = {
   active: boolean;
   featured: boolean;
   bestseller: boolean;
+  description: string;
+  thumbnail: string;
+  gallery: string;
+  sku: string;
+  barcode: string;
+  showOnHome: boolean;
+  displayOrder: string;
 };
 
 function productToForm(product: Product): ProductEditForm {
@@ -71,6 +83,13 @@ function productToForm(product: Product): ProductEditForm {
     active: product.active,
     featured: product.featured,
     bestseller: product.bestseller,
+    description: product.description,
+    thumbnail: product.thumbnail ?? "",
+    gallery: product.gallery.join(", "),
+    sku: product.sku,
+    barcode: product.barcode,
+    showOnHome: product.showOnHome,
+    displayOrder: String(product.displayOrder),
   };
 }
 
@@ -172,13 +191,14 @@ export default function AdminProductsClient() {
     let nextValue = value;
 
     if (
-      name === "mrp" ||
-      name === "price" ||
-      name === "stock" ||
-      name === "deliveryMinutes"
-    ) {
-      nextValue = value.replace(/[^\d.]/g, "");
-    }
+  name === "mrp" ||
+  name === "price" ||
+  name === "stock" ||
+  name === "deliveryMinutes" ||
+  name === "displayOrder"
+) {
+  nextValue = value.replace(/[^\d.]/g, "");
+}
 
     setForm((current) =>
       current
@@ -216,6 +236,7 @@ export default function AdminProductsClient() {
     const price = Number(form.price);
     const stock = Number(form.stock);
     const deliveryMinutes = Number(form.deliveryMinutes);
+    const displayOrder = Number(form.displayOrder);
 
     if (!Number.isFinite(mrp) || mrp <= 0) {
       return "MRP must be greater than zero.";
@@ -241,6 +262,13 @@ export default function AdminProductsClient() {
       deliveryMinutes < 1
     ) {
       return "Delivery time must be at least 1 minute.";
+    }
+
+    if (
+      !Number.isInteger(displayOrder) ||
+      displayOrder < 0
+    ) {
+      return "Display order must be a valid whole number.";
     }
 
     return "";
@@ -281,6 +309,16 @@ export default function AdminProductsClient() {
       active: form.active,
       featured: form.featured,
       bestseller: form.bestseller,
+      description: form.description,
+      thumbnail: form.thumbnail,
+      gallery: form.gallery
+        .split(",")
+        .map((image) => image.trim())
+        .filter(Boolean),
+      sku: form.sku,
+      barcode: form.barcode,
+      showOnHome: form.showOnHome,
+      displayOrder: Number(form.displayOrder),
     });
 
     setSuccessMessage(
@@ -340,48 +378,29 @@ const confirmDeleteProduct = (product: Product) => {
 
       <main>
         <Container className="py-4 sm:py-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <Link
-                href="/admin"
-                aria-label="Back to admin dashboard"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
-              >
-                <ArrowLeft size={19} />
-              </Link>
-
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--primary)]">
-                  Local admin
-                </p>
-
-                <h1 className="text-[24px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[31px]">
-                  Product management
-                </h1>
-
-                <p className="text-xs text-[var(--text-muted)]">
-                  Manage product prices, stock and visibility
-                </p>
+          <AdminPageHeader
+            title="Product management"
+            description="Manage product prices, stock and visibility"
+            action={
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/admin/products/new"
+                  className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-3 text-[11px] font-black text-white"
+                >
+                  <Plus size={15} />
+                  Add product
+                </Link>
+                <button
+                  type="button"
+                  onClick={confirmResetProducts}
+                  className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-[11px] font-black text-[var(--danger)]"
+                >
+                  <RefreshCw size={15} />
+                  Reset
+                </button>
               </div>
-            </div>
-
-            <Link
-  href="/admin/products/new"
-  className="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[var(--primary)] px-3 text-[11px] font-black text-white"
->
-  <Plus size={15} />
-  Add product
-</Link>
-
-            <button
-              type="button"
-              onClick={confirmResetProducts}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-[11px] font-black text-[var(--danger)]"
-            >
-              <RefreshCw size={15} />
-              Reset
-            </button>
-          </div>
+            }
+          />
 
           {successMessage && (
             <div className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs font-bold text-[var(--success)]">
@@ -439,6 +458,100 @@ const confirmDeleteProduct = (product: Product) => {
                     placeholder="Brand name"
                     required
                   />
+
+                  <AdminField
+                    label="Description"
+                    name="description"
+                    value={form.description}
+                    onChange={updateTextField}
+                    placeholder="Product description"
+                  />
+
+                  <ImageUploader
+                    label="Product Gallery"
+                    multiple
+                    value={form.gallery
+                      .split(",")
+                      .map((image) => image.trim())
+                      .filter(Boolean)
+                      .map((url, index) => ({
+                        id: `product-gallery-${index}`,
+                        url,
+                        name: `Gallery image ${index + 1}`,
+                        progress: url.startsWith("blob:") ? 0 : 100,
+                        status: url.startsWith("blob:")
+                          ? "ready"
+                          : "uploaded",
+                      }))}
+                    onChange={(items) =>
+                      setForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              gallery: items
+                                .map((item) => item.url)
+                                .join(", "),
+                            }
+                          : current
+                      )
+                    }
+                  />
+
+                  <ImageUploader
+                    label="Product Thumbnail"
+                    value={
+                      form.thumbnail
+                        ? [
+                            {
+                              id: "product-thumbnail",
+                              url: form.thumbnail,
+                              name: "Product thumbnail",
+                              progress: form.thumbnail.startsWith("blob:")
+                                ? 0
+                                : 100,
+                              status: form.thumbnail.startsWith("blob:")
+                                ? "ready"
+                                : "uploaded",
+                            },
+                          ]
+                        : []
+                    }
+                    onChange={(items) =>
+                      setForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              thumbnail: items[0]?.url ?? "",
+                            }
+                          : current
+                      )
+                    }
+                  />
+
+<AdminField
+  label="SKU"
+  name="sku"
+  value={form.sku}
+  onChange={updateTextField}
+  placeholder="SKU-1001"
+/>
+
+<AdminField
+  label="Barcode"
+  name="barcode"
+  value={form.barcode}
+  onChange={updateTextField}
+  placeholder="123456789"
+/>
+
+<AdminField
+  label="Display Order"
+  name="displayOrder"
+  value={form.displayOrder}
+  onChange={updateTextField}
+  placeholder="1"
+  inputMode="numeric"
+/>
 
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
@@ -584,7 +697,23 @@ const confirmDeleteProduct = (product: Product) => {
                       )
                     }
                   />
+                  <AdminToggle
+  label="Show On Home"
+  description="Display on home page"
+  checked={form.showOnHome}
+  onChange={(checked) =>
+    setForm((current) =>
+      current
+        ? {
+            ...current,
+            showOnHome: checked,
+          }
+        : current
+    )
+  }
+/>
                 </div>
+
 
                 {formError && (
                   <div
@@ -596,13 +725,13 @@ const confirmDeleteProduct = (product: Product) => {
                 )}
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <button
+                  <AdminPrimaryButton
                     type="submit"
-                    className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-sm font-black text-white"
+                    icon={<Save size={17} />}
+                    className="h-12 flex-1 rounded-2xl text-sm"
                   >
-                    <Save size={17} />
                     Save product
-                  </button>
+                  </AdminPrimaryButton>
 
                   <button
                     type="button"
@@ -645,21 +774,11 @@ const confirmDeleteProduct = (product: Product) => {
 
           <section className="mt-5 rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_210px]">
-              <label className="flex h-11 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 focus-within:border-[var(--primary)]">
-                <Search
-                  size={17}
-                  className="shrink-0 text-[var(--text-muted)]"
-                />
-
-                <input
-                  value={query}
-                  onChange={(event) =>
-                    setQuery(event.target.value)
-                  }
-                  placeholder="Search product, brand or category"
-                  className="h-full min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none"
-                />
-              </label>
+              <AdminSearchBar
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search product, brand or category"
+              />
 
               <select
                 value={filter}
@@ -681,31 +800,14 @@ const confirmDeleteProduct = (product: Product) => {
           </section>
 
           {!hydrated ? (
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }).map(
-                (_, index) => (
-                  <div
-                    key={index}
-                    className="h-72 animate-pulse rounded-[24px] bg-white"
-                  />
-                )
-              )}
-            </div>
+            <AdminLoadingSkeleton count={6} className="mt-5" />
           ) : filteredProducts.length === 0 ? (
-            <section className="mt-5 flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white px-5 text-center">
-              <Boxes
-                size={38}
-                className="text-[var(--text-muted)]"
-              />
-
-              <h2 className="mt-4 text-xl font-black text-[var(--text-primary)]">
-                No matching products
-              </h2>
-
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Try another search or product filter.
-              </p>
-            </section>
+            <AdminEmptyState
+              title="No matching products"
+              description="Try another search or product filter."
+              icon={Boxes}
+              className="mt-5"
+            />
           ) : (
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredProducts.map((product) => (
@@ -777,15 +879,11 @@ function AdminProductCard({
               </h2>
             </div>
 
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black ${
-                product.active
-                  ? "bg-green-50 text-[var(--success)]"
-                  : "bg-red-50 text-[var(--danger)]"
-              }`}
-            >
-              {product.active ? "Active" : "Inactive"}
-            </span>
+            <AdminStatusBadge
+              label={product.active ? "Active" : "Inactive"}
+              tone={product.active ? "success" : "danger"}
+              className="shrink-0 text-[9px]"
+            />
           </div>
 
           <p className="mt-2 text-[10px] text-[var(--text-muted)]">

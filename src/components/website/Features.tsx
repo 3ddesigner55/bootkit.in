@@ -52,7 +52,7 @@ export default function Features() {
             delivered beautifully.
           </h2>
 
-          <p className="mt-5 text-base text-[var(--text-secondary)]">
+          <p className="mt-5 text-sm leading-6 text-[var(--text-secondary)]">
             Designed to make grocery shopping simple,
             fast and reliable.
           </p>
@@ -67,7 +67,8 @@ export default function Features() {
             return (
               <div
                 key={feature.title}
-                className="rounded-3xl border border-[var(--border)] bg-white p-6 transition hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]"
+                className="group rounded-[28px] border border-[var(--border)] bg-white/80
+backdrop-blur-md p-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(22,101,52,0.12)] hover:border-[var(--primary)]/20 "
               >
 
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--primary-light)]">
@@ -79,7 +80,7 @@ export default function Features() {
 
                 </div>
 
-                <h3 className="mt-6 text-lg font-semibold">
+                <h3 className="mt-6 text-lg font-bold">
                   {feature.title}
                 </h3>
 

@@ -1,23 +1,20 @@
-
-import DownloadSection from "@/components/website/DownloadSection";
-import WebsiteHeader from "@/components/layout/WebsiteHeader";
-import Hero from "@/components/website/Hero";
-import Features from "@/components/website/Features";
-import AppScreenshots from "@/components/website/AppScreenshots";
-import HowItWorks from "@/components/website/HowItWorks";
+import WebsiteHome from "@/components/website/WebsiteHome";
+import AppHome from "@/components/home/AppHome";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <WebsiteHeader />
+    <>
+      {/* Mobile View */}
 
-      <main>
-        <Hero />
-        <Features />
-        <AppScreenshots />
-        <HowItWorks />
-        <DownloadSection />
-      </main>
-    </div>
+      <div className="block lg:hidden">
+        <AppHome />
+      </div>
+
+      {/* Desktop View */}
+
+      <div className="hidden lg:block">
+        <WebsiteHome />
+      </div>
+    </>
   );
 }

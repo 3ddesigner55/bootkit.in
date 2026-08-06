@@ -1,74 +1,59 @@
 "use client";
 
-import Container from "@/components/ui/Container";
-import ProductCard from "@/components/product/ProductCard";
-import SectionHeading from "@/components/ui/SectionHeading";
+import Link from "next/link";
+import HomeProductCard from "@/components/product/HomeProductCard";
 import { useAdminProducts } from "@/hooks/useAdminProducts";
 
-export default function ProductSection() {
+interface ProductSectionProps {
+  title: string;
+  categorySlug: string;
+  limit?: number;
+}
+
+export default function ProductSection({
+  title,
+  categorySlug,
+  limit = 6,
+}: ProductSectionProps) {
   const {
     activeProducts,
     hydrated,
   } = useAdminProducts();
 
-  const featuredProducts = activeProducts.filter(
-    (product) => product.featured
-  );
+  if (!hydrated) return null;
 
-  const visibleProducts =
-    featuredProducts.length > 0
-      ? featuredProducts
-      : activeProducts.slice(0, 8);
+  const products = activeProducts
+    .filter(
+      (product) =>
+        product.categorySlug === categorySlug
+    )
+    .slice(0, limit);
 
-  if (!hydrated) {
-    return (
-      <section className="py-5 sm:py-7 lg:py-9">
-        <Container>
-          <SectionHeading
-            title="Popular near you"
-            description="Frequently ordered essentials available for fast local delivery."
-            actionLabel="View all"
-            actionHref="/products"
-          />
-
-          <div className="-mx-3 flex gap-3 overflow-hidden px-3 pb-3 sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0 lg:grid-cols-4 xl:grid-cols-6">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-[300px] w-[174px] shrink-0 animate-pulse rounded-[20px] bg-white sm:w-auto"
-              />
-            ))}
-          </div>
-        </Container>
-      </section>
-    );
-  }
-
-  if (visibleProducts.length === 0) {
-    return null;
-  }
+  if (products.length === 0) return null;
 
   return (
-    <section className="py-5 sm:py-7 lg:py-9">
-      <Container>
-        <SectionHeading
-          title="Popular near you"
-          description="Frequently ordered essentials available for fast local delivery."
-          actionLabel="View all"
-          actionHref="/products"
-        />
+    <section className="mt-8">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-bold">
+          {title}
+        </h2>
 
-        <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-3 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 lg:grid-cols-4 xl:grid-cols-6">
-          {visibleProducts.map((product) => (
-            <div
-              key={product.id}
-              className="w-[174px] shrink-0 snap-start sm:w-auto"
-            >
-              <ProductCard product={product} />
-            </div>
-          ))}
-        </div>
-      </Container>
+        <Link
+          href={`/category/${categorySlug}`}
+          className="text-sm font-semibold text-green-600"
+        >
+          See All
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+  {products.map((product) => (
+    <HomeProductCard
+      key={product.id}
+      product={product}
+    />
+  ))}
+</div>
     </section>
   );
 }

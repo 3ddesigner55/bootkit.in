@@ -357,7 +357,7 @@ export default function SearchResults() {
                       </span>
 
                       <span className="mt-1 block text-[9px] font-semibold text-[var(--text-muted)]">
-                        {category.productCount} products
+                        {products.filter((product) => product.categorySlug === category.slug).length} products
                       </span>
                     </span>
 

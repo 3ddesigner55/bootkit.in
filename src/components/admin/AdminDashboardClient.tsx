@@ -8,12 +8,14 @@ import {
   ChevronRight,
   Clock3,
   Grid2X2,
+  Image,
   MapPin,
   PackageCheck,
   Plus,
   ShoppingBag,
   Sparkles,
   Store,
+  Tag,
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -30,6 +32,8 @@ const managementLinks = [
   { title: "Products", href: "/admin/products", icon: Boxes, tone: "bg-sky-100 text-sky-700" },
   { title: "Categories", href: "/admin/categories", icon: Grid2X2, tone: "bg-violet-100 text-violet-700" },
   { title: "Delivery areas", href: "/admin/delivery-areas", icon: MapPin, tone: "bg-rose-100 text-rose-700" },
+  { title: "Media library", href: "/admin/media", icon: Image, tone: "bg-emerald-100 text-emerald-700" },
+  { title: "Brand management", href: "/admin/brands", icon: Tag, tone: "bg-orange-100 text-orange-700" },
 ];
 
 export default function AdminDashboardClient() {
@@ -87,9 +91,9 @@ export default function AdminDashboardClient() {
                 </div>
               </section>
 
-              <StatTile className="lg:col-span-3" icon={ShoppingBag} label="Total orders" value={String(stats.totalOrders)} detail="Orders received" />
-              <StatTile className="lg:col-span-2" icon={Clock3} label="In progress" value={String(stats.activeOrders)} detail="Need attention" accent />
-              <StatTile className="lg:col-span-2" icon={PackageCheck} label="Delivered" value={String(stats.deliveredOrders)} detail="Successfully fulfilled" />
+              <StatTile className="lg:col-span-3" href="/admin/orders" icon={ShoppingBag} label="Total orders" value={String(stats.totalOrders)} detail="Orders received" />
+              <StatTile className="lg:col-span-2" href="/admin/orders" icon={Clock3} label="In progress" value={String(stats.activeOrders)} detail="Need attention" accent />
+              <StatTile className="lg:col-span-2" href="/admin/orders" icon={PackageCheck} label="Delivered" value={String(stats.deliveredOrders)} detail="Successfully fulfilled" />
 
               <section className="rounded-[28px] border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] lg:col-span-7 lg:row-span-2 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
@@ -105,7 +109,7 @@ export default function AdminDashboardClient() {
 
               <section className="rounded-[28px] bg-[var(--surface-muted)] p-5 lg:col-span-5 sm:p-6">
                 <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">Catalogue</p><h2 className="mt-1 text-lg font-black tracking-[-0.04em]">Your inventory</h2></div><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[var(--primary)] shadow-[var(--shadow-xs)]"><Store size={18} /></span></div>
-                <div className="mt-5 grid grid-cols-2 gap-3"><InventoryCount label="Active products" value={String(products.length)} /><InventoryCount label="Categories" value={String(categories.length)} /></div>
+                <div className="mt-5 grid grid-cols-2 gap-3"><InventoryCount href="/admin/products" label="Active products" value={String(products.length)} /><InventoryCount href="/admin/categories" label="Categories" value={String(categories.length)} /></div>
                 <Link href="/admin/inventory" className="mt-4 flex items-center justify-between rounded-xl bg-white px-4 py-3 text-xs font-black transition hover:text-[var(--primary)]">Open inventory <ArrowUpRight size={16} /></Link>
               </section>
 
@@ -121,12 +125,12 @@ export default function AdminDashboardClient() {
   );
 }
 
-function StatTile({ icon: Icon, label, value, detail, accent, className }: { icon: typeof ShoppingBag; label: string; value: string; detail: string; accent?: boolean; className?: string }) {
-  return <section className={`rounded-[28px] border p-5 shadow-[var(--shadow-sm)] ${accent ? "border-amber-200 bg-amber-50" : "border-[var(--border)] bg-white"} ${className ?? ""}`}><span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${accent ? "bg-amber-200 text-amber-800" : "bg-[var(--primary-light)] text-[var(--primary)]"}`}><Icon size={18} /></span><p className="mt-5 text-3xl font-black tracking-[-0.055em]">{value}</p><p className="mt-1 text-xs font-black">{label}</p><p className="mt-1 text-[10px] text-[var(--text-muted)]">{detail}</p></section>;
+function StatTile({ icon: Icon, label, value, detail, accent, className, href }: { icon: typeof ShoppingBag; label: string; value: string; detail: string; accent?: boolean; className?: string; href: string }) {
+  return <Link href={href} className={`rounded-[28px] border p-5 shadow-[var(--shadow-sm)] ${accent ? "border-amber-200 bg-amber-50" : "border-[var(--border)] bg-white"} ${className ?? ""}`}><span className={`flex h-10 w-10 items-center justify-center rounded-2xl ${accent ? "bg-amber-200 text-amber-800" : "bg-[var(--primary-light)] text-[var(--primary)]"}`}><Icon size={18} /></span><p className="mt-5 text-3xl font-black tracking-[-0.055em]">{value}</p><p className="mt-1 text-xs font-black">{label}</p><p className="mt-1 text-[10px] text-[var(--text-muted)]">{detail}</p></Link>;
 }
 
-function InventoryCount({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-2xl bg-white p-4"><p className="text-2xl font-black tracking-[-0.04em]">{value}</p><p className="mt-1 text-[10px] font-bold text-[var(--text-muted)]">{label}</p></div>;
+function InventoryCount({ label, value, href }: { label: string; value: string; href: string }) {
+  return <Link href={href} className="rounded-2xl bg-white p-4"><p className="text-2xl font-black tracking-[-0.04em]">{value}</p><p className="mt-1 text-[10px] font-bold text-[var(--text-muted)]">{label}</p></Link>;
 }
 
 function DashboardSkeleton() {

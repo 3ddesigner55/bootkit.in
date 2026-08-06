@@ -275,6 +275,13 @@ export default function AddProductPage() {
         brand: form.brand.trim(),
         categorySlug: form.categorySlug,
         image: form.image.trim(),
+        description: "",
+        thumbnail: form.image.trim(),
+        gallery: form.image.trim() ? [form.image.trim()] : [],
+        sku: "",
+        barcode: "",
+        showOnHome: false,
+        displayOrder: 0,
         images:
   form.images.length > 0
     ? form.images.filter((img) => img.trim() !== "")

@@ -6,10 +6,10 @@ import Container from "@/components/ui/Container";
 
 export default function Hero() {
   return (
-    <section className={WEBSITE.section}>
+    <section className={`${WEBSITE.section} relative overflow-hidden`}>
 
       <Container>
-        <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-16">
+        <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-8">
 
           {/* LEFT */}
 
@@ -32,7 +32,7 @@ export default function Hero() {
 
             <Link
               href="#"
-              className={WEBSITE.button + " mt-8 gap-3"}
+              className={WEBSITE.button + " mt-6 gap-3"}
             >
               <Download size={20} />
 
@@ -43,7 +43,7 @@ export default function Hero() {
               Available soon on Google Play.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-5 text-sm text-[var(--text-secondary)]">
+            <div className="mt-6 flex flex-wrap gap-5 text-sm text-[var(--text-secondary)]">
 
               <div className="flex items-center gap-2">
                 <Truck
@@ -87,6 +87,9 @@ export default function Hero() {
           {/* RIGHT */}
 
 <div className="relative hidden items-center justify-center lg:flex">
+        {/* Glass Background */}
+
+<div className="absolute right-8 top-6 h-[540px] w-[420px] rounded-[60px] border border-white/40 bg-white/30 backdrop-blur-xl shadow-[0_30px_80px_rgba(22,101,52,0.12)]" />
 
   {/* Background Glow */}
 
@@ -94,7 +97,7 @@ export default function Hero() {
 
   {/* Product Screen */}
 
-  <div className="relative z-20 float-slow overflow-hidden rounded-[34px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-lg)] rotate-[-8deg]">
+  <div className="relative z-20 float-slow overflow-hidden rounded-[34px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-lg)] rotate-[-10deg]">
     <Image
       src="/images/app/products.png"
       alt="BootKiT Products"
@@ -108,7 +111,7 @@ export default function Hero() {
 
   {/* Cart Screen */}
 
-  <div className="absolute bottom-0 right-0 z-30 float-fast overflow-hidden rounded-[34px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-lg)] rotate-[8deg]">
+  <div className="absolute bottom-0 right-0 z-30 float-fast overflow-hidden rounded-[34px] border border-[var(--border)] bg-white p-3 shadow-[var(--shadow-lg)] rotate-[10deg]">
 
     <Image
       src="/images/app/cart.png"
@@ -121,6 +124,16 @@ export default function Hero() {
   </div>
 
 </div>
+<div className="absolute inset-0 overflow-hidden">
+
+  <div className="absolute left-[-120px] top-20 h-[320px] w-[320px] rounded-full bg-[var(--primary)]/8 blur-[120px]" />
+
+  <div className="absolute right-[-100px] top-10 h-[420px] w-[420px] rounded-full bg-lime-200/30 blur-[140px]" />
+
+  <div className="absolute bottom-[-80px] left-1/2 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-emerald-100 blur-[120px]" />
+
+</div>
+
       </Container>
       
     </section>
