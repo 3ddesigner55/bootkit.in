@@ -14,6 +14,7 @@ import {
   heroBannerRoutes,
 } from './routes/heroBanner.routes';
 import { homeRoutes } from './routes/home.routes';
+import { orderRoutes } from './routes/order.routes';
 import { profileRoutes } from './routes/profile.routes';
 import { adminProductRoutes, productRoutes } from './routes/product.routes';
 import { searchRoutes } from './routes/search.routes';
@@ -56,6 +57,7 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/addresses', addressRoutes);
+app.use('/api/orders', orderRoutes);
 
 app.use(errorMiddleware);
 

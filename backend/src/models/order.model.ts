@@ -11,6 +11,7 @@ export type OrderItem = {
 };
 
 export type OrderDocument = {
+  orderNumber: string;
   user: Types.ObjectId;
   store: Types.ObjectId;
   address: Types.ObjectId;
@@ -24,6 +25,17 @@ export type OrderDocument = {
   couponDiscount: number;
   paymentMethod: string;
   paymentStatus: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  paymentInitiatedAt?: Date | null;
+  paymentCompletedAt?: Date | null;
+  paymentFailedAt?: Date | null;
+  paymentFailureReason?: string;
+  refundId?: string;
+  refundStatus?: string;
+  refundAmount?: number;
+  refundedAt?: Date | null;
   status: string;
   estimatedDeliveryTime?: Date | null;
   deliveredAt?: Date | null;
@@ -46,6 +58,14 @@ const orderItemSchema = new Schema<OrderItem>(
 
 const orderSchema = new Schema<OrderDocument>(
   {
+    orderNumber: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      immutable: true,
+      trim: true,
+    },
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     store: { type: Schema.Types.ObjectId, ref: 'Store', required: true },
     address: { type: Schema.Types.ObjectId, ref: 'Address', required: true },
@@ -66,6 +86,17 @@ const orderSchema = new Schema<OrderDocument>(
     couponDiscount: { type: Number, default: 0, min: 0 },
     paymentMethod: { type: String, required: true, trim: true },
     paymentStatus: { type: String, default: 'PENDING', trim: true },
+    razorpayOrderId: { type: String, trim: true },
+    razorpayPaymentId: { type: String, trim: true },
+    razorpaySignature: { type: String, trim: true },
+    paymentInitiatedAt: { type: Date },
+    paymentCompletedAt: { type: Date },
+    paymentFailedAt: { type: Date },
+    paymentFailureReason: { type: String, trim: true },
+    refundId: { type: String, trim: true },
+    refundStatus: { type: String, trim: true },
+    refundAmount: { type: Number, min: 0 },
+    refundedAt: { type: Date },
     status: { type: String, default: 'PENDING', trim: true },
     estimatedDeliveryTime: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
@@ -78,6 +109,7 @@ const orderSchema = new Schema<OrderDocument>(
 orderSchema.index({ user: 1 });
 orderSchema.index({ store: 1 });
 orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ razorpayOrderId: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ createdAt: -1 });
 
