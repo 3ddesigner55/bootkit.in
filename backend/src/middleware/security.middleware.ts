@@ -1,9 +1,8 @@
 import type { RequestHandler } from 'express';
 import mongoSanitize from 'express-mongo-sanitize';
-import { createRequire } from 'node:module';
+import hpp from 'hpp';
 
-const loadModule = createRequire(__filename);
-const hpp = loadModule('hpp') as () => RequestHandler;
+
 
 function sanitizeValue(value: unknown): void {
   if (value && typeof value === 'object') {
