@@ -26,13 +26,25 @@ function getPaymentDetails(order: {
 }
 
 export async function createRazorpayOrder(
+  
   userId: string,
   input: RazorpayOrderInput,
-) {
+)
+
+ {
+    const paymentClient = razorpay;
+
+  if (!paymentClient) {
+    throw serviceError(
+      'Online payment is temporarily unavailable.',
+      HTTP_STATUS.SERVICE_UNAVAILABLE,
+    );
+  }
   const order = await Order.findOne({
     orderNumber: input.orderNumber,
     user: userId,
   });
+  
 
   if (!order) {
     throw serviceError('Order not found.', HTTP_STATUS.NOT_FOUND);
@@ -95,7 +107,7 @@ export async function createRazorpayOrder(
   }
 
   try {
-    const razorpayOrder = await razorpay.orders.create({
+   const razorpayOrder = await paymentClient.orders.create({
       amount,
       currency: RAZORPAY_CURRENCY,
       receipt: reservedOrder.orderNumber,

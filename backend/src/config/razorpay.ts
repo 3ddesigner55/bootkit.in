@@ -1,23 +1,20 @@
 import Razorpay from 'razorpay';
 
-function readRequiredEnvironmentVariable(name: string): string {
-  const value = process.env[name];
+export const razorpayKeyId =
+  process.env.RAZORPAY_KEY_ID?.trim() ?? '';
 
-  if (!value) {
-    throw new Error(`${name} environment variable is required.`);
-  }
+const razorpayKeySecret =
+  process.env.RAZORPAY_KEY_SECRET?.trim() ?? '';
 
-  return value;
-}
-
-export const razorpayKeyId = readRequiredEnvironmentVariable('RAZORPAY_KEY_ID');
-const razorpayKeySecret = readRequiredEnvironmentVariable(
-  'RAZORPAY_KEY_SECRET',
+export const isRazorpayConfigured = Boolean(
+  razorpayKeyId && razorpayKeySecret,
 );
 
-const razorpay = new Razorpay({
-  key_id: razorpayKeyId,
-  key_secret: razorpayKeySecret,
-});
+const razorpay: Razorpay | null = isRazorpayConfigured
+  ? new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    })
+  : null;
 
 export default razorpay;

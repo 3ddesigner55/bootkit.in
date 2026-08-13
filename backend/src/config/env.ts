@@ -15,12 +15,12 @@ export const env = cleanEnv(process.env, {
   CLOUDINARY_CLOUD_NAME: externalServiceString,
   CLOUDINARY_API_KEY: externalServiceString,
   CLOUDINARY_API_SECRET: externalServiceString,
-  RAZORPAY_KEY_ID: externalServiceString,
-  RAZORPAY_KEY_SECRET: externalServiceString,
-  RAZORPAY_WEBHOOK_SECRET: externalServiceString,
-  SMS_PROVIDER_URL: externalServiceString,
-  SMS_PROVIDER_TOKEN: externalServiceString,
-  SMS_FROM: externalServiceString,
+ RAZORPAY_KEY_ID: str({ default: '' }),
+RAZORPAY_KEY_SECRET: str({ default: '' }),
+RAZORPAY_WEBHOOK_SECRET: str({ default: '' }),
+SMS_PROVIDER_URL: str({ default: '' }),
+SMS_PROVIDER_TOKEN: str({ default: '' }),
+SMS_FROM: str({ default: '' }),
   FRONTEND_URL: url(),
 });
 
