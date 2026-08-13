@@ -25,6 +25,7 @@ export async function getAdminOrdersController(
   void request;
   const orders = await getAdminOrders(
     response.locals.adminOrderListQuery as AdminOrderListQuery,
+    response.locals.allowedStoreIds as string[] | null | undefined,
   );
 
   return sendSuccess(
@@ -39,7 +40,10 @@ export async function getAdminOrderController(
   request: Request,
   response: Response,
 ) {
-  const order = await getAdminOrderByOrderNumber(getOrderNumber(request));
+  const order = await getAdminOrderByOrderNumber(
+    getOrderNumber(request),
+    response.locals.allowedStoreIds as string[] | null | undefined,
+  );
 
   return sendSuccess(
     response,
@@ -56,6 +60,7 @@ export async function updateAdminOrderStatusController(
   const order = await updateAdminOrderStatus(
     getOrderNumber(request),
     response.locals.adminOrderStatus as AdminOrderStatusInput,
+    response.locals.allowedStoreIds as string[] | null | undefined,
   );
 
   return sendSuccess(

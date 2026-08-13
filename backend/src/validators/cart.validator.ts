@@ -6,6 +6,7 @@ import type { ApiError } from '../types/api';
 export type AddCartItemInput = {
   productId: string;
   quantity: number;
+  storeId?: string;
 };
 
 export type UpdateCartItemInput = {
@@ -47,11 +48,18 @@ export function validateAddCartItem(input: unknown): AddCartItemInput {
     throw validationError('productId is required.');
   }
 
+  const storeId =
+    typeof body.storeId === 'string' && body.storeId.trim()
+      ? body.storeId.trim()
+      : undefined;
+
   return {
     productId: body.productId.trim(),
     quantity: getQuantity(body),
+    ...(storeId ? { storeId } : {}),
   };
 }
+
 
 export function validateUpdateCartItem(input: unknown): UpdateCartItemInput {
   return { quantity: getQuantity(getObject(input)) };

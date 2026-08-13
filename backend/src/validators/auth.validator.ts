@@ -20,6 +20,14 @@ export type RefreshTokenInput = {
   refreshToken: string;
 };
 
+export type SendOtpInput = {
+  phone: string;
+};
+
+export type VerifyOtpInput = SendOtpInput & {
+  otp: string;
+};
+
 function validationError(message: string): ApiError {
   return Object.assign(new Error(message), {
     statusCode: HTTP_STATUS.BAD_REQUEST,
@@ -65,6 +73,24 @@ function validatePassword(password: string): string {
   return password;
 }
 
+function validatePhone(phone: string): string {
+  const normalizedPhone = phone.replace(/[\s-]/g, '');
+
+  if (!/^\+?[1-9]\d{7,14}$/.test(normalizedPhone)) {
+    throw validationError('phone must be a valid international phone number.');
+  }
+
+  return normalizedPhone;
+}
+
+function validateOtp(otp: string): string {
+  if (!/^\d{6}$/.test(otp)) {
+    throw validationError('otp must contain exactly 6 digits.');
+  }
+
+  return otp;
+}
+
 export function validateRegister(input: unknown): RegisterInput {
   const body = getObject(input);
 
@@ -90,6 +116,21 @@ export function validateRefreshToken(input: unknown): RefreshTokenInput {
   const body = getObject(input);
 
   return { refreshToken: getRequiredString(body, 'refreshToken') };
+}
+
+export function validateSendOtp(input: unknown): SendOtpInput {
+  const body = getObject(input);
+
+  return { phone: validatePhone(getRequiredString(body, 'phone')) };
+}
+
+export function validateVerifyOtp(input: unknown): VerifyOtpInput {
+  const body = getObject(input);
+
+  return {
+    phone: validatePhone(getRequiredString(body, 'phone')),
+    otp: validateOtp(getRequiredString(body, 'otp')),
+  };
 }
 
 export function validateRegisterRequest(
@@ -125,6 +166,32 @@ export function validateRefreshTokenRequest(
 ): void {
   try {
     response.locals.refreshToken = validateRefreshToken(request.body);
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export function validateSendOtpRequest(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  try {
+    response.locals.sendOtp = validateSendOtp(request.body);
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+export function validateVerifyOtpRequest(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  try {
+    response.locals.verifyOtp = validateVerifyOtp(request.body);
     next();
   } catch (error) {
     next(error);

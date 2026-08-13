@@ -7,10 +7,12 @@ import {
   getAdminHeroBannerController,
   getAdminHeroBannersController,
   getPublicHeroBannersController,
+  uploadHeroBannerImagesController,
   updateHeroBannerController,
 } from '../controllers/heroBanner.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { authorizeRoles } from '../middleware/role.middleware';
+import { upload } from '../middleware/upload.middleware';
 import { asyncHandler } from '../utils/asyncHandler';
 import {
   validateHeroBannerCreateRequest,
@@ -33,6 +35,16 @@ adminHeroBannerRoutes.get(
   authenticate,
   authorizeRoles(ROLES.ADMIN),
   asyncHandler(getAdminHeroBannerController),
+);
+adminHeroBannerRoutes.post(
+  '/upload',
+  authenticate,
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
+  upload.fields([
+    { name: 'desktopImage', maxCount: 1 },
+    { name: 'mobileImage', maxCount: 1 },
+  ]),
+  asyncHandler(uploadHeroBannerImagesController),
 );
 adminHeroBannerRoutes.post(
   '/',

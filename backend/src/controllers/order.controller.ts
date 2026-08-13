@@ -4,11 +4,14 @@ import { HTTP_STATUS } from '../constants/httpStatus';
 import {
   cancelOrder,
   confirmCodOrder,
+  getMyOrders,
+  getOrderAgainProducts,
   placeOrder,
 } from '../services/order.service';
 import { sendSuccess } from '../utils/apiResponse';
 import type {
   CancelOrderInput,
+  MyOrdersQuery,
   PlaceOrderInput,
 } from '../validators/order.validator';
 
@@ -67,5 +70,36 @@ export async function confirmCodOrderController(
     HTTP_STATUS.OK,
     order,
     'Cash on delivery order confirmed successfully.',
+  );
+}
+
+export async function getMyOrdersController(
+  request: Request,
+  response: Response,
+) {
+  const result = await getMyOrders(
+    request.user!.id,
+    response.locals.myOrdersQuery as MyOrdersQuery,
+  );
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.OK,
+    result,
+    'Orders retrieved successfully.',
+  );
+}
+
+export async function getOrderAgainController(
+  request: Request,
+  response: Response,
+) {
+  const result = await getOrderAgainProducts(request.user!.id);
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.OK,
+    result,
+    'Order again products retrieved successfully.',
   );
 }

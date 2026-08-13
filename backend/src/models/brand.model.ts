@@ -5,10 +5,13 @@ export type BrandDocument = {
   slug: string;
   description: string;
   logo: string;
+  banner?: string;
   website: string;
   featured: boolean;
   active: boolean;
   displayOrder: number;
+  collectionHub?:
+    'beauty' | 'electronics' | 'pharmacy' | 'decor' | 'kids' | 'gifting' | null;
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
   deletedAt?: Date | null;
@@ -21,10 +24,24 @@ const brandSchema = new Schema<BrandDocument>(
     slug: { type: String, required: true, trim: true, lowercase: true },
     description: { type: String, default: '', trim: true },
     logo: { type: String, default: '', trim: true },
+    banner: { type: String, default: '', trim: true },
     website: { type: String, default: '', trim: true },
     featured: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
     displayOrder: { type: Number, default: 0 },
+    collectionHub: {
+      type: String,
+      enum: [
+        'beauty',
+        'electronics',
+        'pharmacy',
+        'decor',
+        'kids',
+        'gifting',
+        null,
+      ],
+      default: null,
+    },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     deletedAt: { type: Date, default: null },

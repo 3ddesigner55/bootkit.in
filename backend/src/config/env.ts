@@ -5,7 +5,7 @@ const externalServiceString = isDevelopment ? str({ default: '' }) : str();
 
 export const env = cleanEnv(process.env, {
   NODE_ENV: str({ choices: ['development', 'test', 'production'] }),
-  PORT: port(),
+  PORT: port({ default: 5001 }),
   MONGODB_URI: str(),
   DB_NAME: str(),
   JWT_ACCESS_SECRET: str(),
@@ -18,6 +18,9 @@ export const env = cleanEnv(process.env, {
   RAZORPAY_KEY_ID: externalServiceString,
   RAZORPAY_KEY_SECRET: externalServiceString,
   RAZORPAY_WEBHOOK_SECRET: externalServiceString,
+  SMS_PROVIDER_URL: externalServiceString,
+  SMS_PROVIDER_TOKEN: externalServiceString,
+  SMS_FROM: externalServiceString,
   FRONTEND_URL: url(),
 });
 
@@ -29,6 +32,9 @@ if (env.NODE_ENV === 'development') {
     RAZORPAY_KEY_ID: 'development-razorpay-not-configured',
     RAZORPAY_KEY_SECRET: 'development-razorpay-not-configured',
     RAZORPAY_WEBHOOK_SECRET: 'development-razorpay-not-configured',
+    SMS_PROVIDER_URL: 'development-sms-not-configured',
+    SMS_PROVIDER_TOKEN: 'development-sms-not-configured',
+    SMS_FROM: 'development-sms-not-configured',
   };
 
   for (const [name, value] of Object.entries(developmentServiceValues)) {

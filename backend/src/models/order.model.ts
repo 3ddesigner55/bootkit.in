@@ -37,10 +37,25 @@ export type OrderDocument = {
   refundAmount?: number;
   refundedAt?: Date | null;
   status: string;
+  statusHistory?: Array<{
+    actor?: Types.ObjectId | null;
+    oldStatus: string;
+    newStatus: string;
+    reason?: string;
+    timestamp: Date;
+  }>;
+  rider?: Types.ObjectId | null;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  walletDebit: number;
+  deliveryConfigVersion?: number;
   estimatedDeliveryTime?: Date | null;
   deliveredAt?: Date | null;
   cancelReason: string;
   cancelledAt?: Date | null;
+  idempotencyKey?: string;
+  requestFingerprint?: string;
 };
 
 const orderItemSchema = new Schema<OrderItem>(
@@ -98,10 +113,27 @@ const orderSchema = new Schema<OrderDocument>(
     refundAmount: { type: Number, min: 0 },
     refundedAt: { type: Date },
     status: { type: String, default: 'PENDING', trim: true },
+    statusHistory: [
+      {
+        actor: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+        oldStatus: { type: String, required: true },
+        newStatus: { type: String, required: true },
+        reason: { type: String, default: '' },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+    rider: { type: Schema.Types.ObjectId, ref: 'Rider', default: null },
+    cgst: { type: Number, default: 0, min: 0 },
+    sgst: { type: Number, default: 0, min: 0 },
+    igst: { type: Number, default: 0, min: 0 },
+    walletDebit: { type: Number, default: 0, min: 0 },
+    deliveryConfigVersion: { type: Number },
     estimatedDeliveryTime: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
     cancelReason: { type: String, default: '', trim: true },
     cancelledAt: { type: Date, default: null },
+    idempotencyKey: { type: String, trim: true },
+    requestFingerprint: { type: String, trim: true },
   },
   { timestamps: true },
 );
@@ -112,7 +144,18 @@ orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ razorpayOrderId: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ createdAt: -1 });
+orderSchema.index(
+  { user: 1, idempotencyKey: 1 },
+  {
+    unique: true,
+    name: 'uniq_user_idempotencyKey',
+    partialFilterExpression: { idempotencyKey: { $type: 'string' } },
+  },
+);
 
 const Order = models.Order || model<OrderDocument>('Order', orderSchema);
 
 export default Order;
+
+
+

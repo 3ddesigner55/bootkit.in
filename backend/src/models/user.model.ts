@@ -9,6 +9,15 @@ export type UserDocument = {
   phone: string;
   password: string;
   role: Role;
+  status: 'ACTIVE' | 'BLOCKED' | 'SUSPENDED';
+  securityHistory?: Array<{
+    action: string;
+    reason: string;
+    actorId: Types.ObjectId;
+    timestamp: Date;
+  }>;
+  sellerStatus?: 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'REJECTED' | null;
+  assignedStores?: Types.ObjectId[];
   avatar: string;
   isActive: boolean;
   isVerified: boolean;
@@ -22,17 +31,36 @@ export type UserDocument = {
 
 const userSchema = new Schema<UserDocument>(
   {
-    firstName: { type: String, required: true, trim: true },
+    firstName: { type: String, default: '', trim: true },
     lastName: { type: String, default: '', trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
+    email: { type: String, trim: true, lowercase: true },
     phone: { type: String, required: true, trim: true },
-    password: { type: String, required: true, select: false },
+    password: { type: String, select: false },
     role: {
       type: String,
       required: true,
       enum: ROLE_VALUES,
       default: 'CUSTOMER',
     },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'BLOCKED', 'SUSPENDED'],
+      default: 'ACTIVE',
+    },
+    securityHistory: [
+      {
+        action: { type: String, required: true },
+        reason: { type: String, default: '' },
+        actorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
+    sellerStatus: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'SUSPENDED', 'REJECTED', null],
+      default: null,
+    },
+    assignedStores: [{ type: Schema.Types.ObjectId, ref: 'Store' }],
     avatar: { type: String, default: '', trim: true },
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
@@ -46,9 +74,10 @@ const userSchema = new Schema<UserDocument>(
   { timestamps: true },
 );
 
-userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ role: 1 });
+userSchema.index({ assignedStores: 1 });
 
 const User = models.User || model<UserDocument>('User', userSchema);
 

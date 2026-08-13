@@ -7,6 +7,7 @@ import {
   getAdminHeroBannerById,
   getAdminHeroBanners,
   getPublicHeroBanners,
+  uploadHeroBannerImages,
   updateHeroBanner,
 } from '../services/heroBanner.service';
 import { sendSuccess } from '../utils/apiResponse';
@@ -19,8 +20,9 @@ export async function getPublicHeroBannersController(
   request: Request,
   response: Response,
 ) {
-  void request;
-  const heroBanners = await getPublicHeroBanners();
+  const hub =
+    typeof request.query.hub === 'string' ? request.query.hub : undefined;
+  const heroBanners = await getPublicHeroBanners(hub);
 
   return sendSuccess(
     response,
@@ -105,5 +107,24 @@ export async function deleteHeroBannerController(
     HTTP_STATUS.OK,
     heroBanner,
     'Hero banner deleted successfully.',
+  );
+}
+
+export async function uploadHeroBannerImagesController(
+  request: Request,
+  response: Response,
+) {
+  const uploadedFiles = request.files;
+  const files = Array.isArray(uploadedFiles) ? undefined : uploadedFiles;
+  const images = await uploadHeroBannerImages({
+    desktopImage: files?.desktopImage?.[0],
+    mobileImage: files?.mobileImage?.[0],
+  });
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.CREATED,
+    images,
+    'Hero banner images uploaded successfully.',
   );
 }

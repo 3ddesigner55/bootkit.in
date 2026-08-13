@@ -12,6 +12,9 @@ export type HeroBannerInput = {
   buttonLink?: string;
   displayOrder: number;
   showOnHome?: boolean;
+  collectionHub?:
+    'beauty' | 'electronics' | 'pharmacy' | 'decor' | 'kids' | 'gifting' | null;
+  placement?: 'hero' | 'featuredThisWeek';
   startDate?: Date | null;
   endDate?: Date | null;
   active?: boolean;
@@ -127,6 +130,67 @@ function getOptionalDate(
   return new Date(value);
 }
 
+function getOptionalCollectionHub(
+  input: Record<string, unknown>,
+  field: string,
+): HeroBannerInput['collectionHub'] | undefined {
+  const value = input[field];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw validationError(`${field} must be a valid string or null.`);
+  }
+
+  const normalized = value.trim().toLowerCase();
+  const validHubs = [
+    'beauty',
+    'electronics',
+    'pharmacy',
+    'decor',
+    'kids',
+    'gifting',
+  ];
+
+  if (!validHubs.includes(normalized)) {
+    throw validationError(
+      `${field} must be one of beauty, electronics, pharmacy, decor, kids, gifting, or null.`,
+    );
+  }
+
+  return normalized as HeroBannerInput['collectionHub'];
+}
+
+function getOptionalPlacement(
+  input: Record<string, unknown>,
+  field: string,
+): HeroBannerInput['placement'] | undefined {
+  const value = input[field];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw validationError(`${field} must be a string.`);
+  }
+
+  const normalized = value.trim();
+  const validPlacements = ['hero', 'featuredThisWeek'];
+
+  if (!validPlacements.includes(normalized)) {
+    throw validationError(`${field} must be one of hero, featuredThisWeek.`);
+  }
+
+  return normalized as HeroBannerInput['placement'];
+}
+
 function getOptionalFields(
   input: Record<string, unknown>,
 ): Omit<HeroBannerInput, 'title' | 'desktopImage' | 'displayOrder'> {
@@ -135,6 +199,8 @@ function getOptionalFields(
   const buttonText = getOptionalString(input, 'buttonText');
   const buttonLink = getOptionalString(input, 'buttonLink');
   const showOnHome = getOptionalBoolean(input, 'showOnHome');
+  const collectionHub = getOptionalCollectionHub(input, 'collectionHub');
+  const placement = getOptionalPlacement(input, 'placement');
   const startDate = getOptionalDate(input, 'startDate');
   const endDate = getOptionalDate(input, 'endDate');
   const active = getOptionalBoolean(input, 'active');
@@ -145,6 +211,8 @@ function getOptionalFields(
     ...(buttonText !== undefined ? { buttonText } : {}),
     ...(buttonLink !== undefined ? { buttonLink } : {}),
     ...(showOnHome !== undefined ? { showOnHome } : {}),
+    ...(collectionHub !== undefined ? { collectionHub } : {}),
+    ...(placement !== undefined ? { placement } : {}),
     ...(startDate !== undefined ? { startDate } : {}),
     ...(endDate !== undefined ? { endDate } : {}),
     ...(active !== undefined ? { active } : {}),

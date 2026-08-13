@@ -42,14 +42,24 @@ export type ProductDocument = {
   tags?: string[];
   fallbackIcon?: string;
   featured: boolean;
+  bestseller: boolean;
   active: boolean;
   showOnHome: boolean;
   homeSection: string;
   displayOrder: number;
   weight: number;
   unit: string;
+  deliveryMinutes?: number;
+  rating: number;
   metaTitle: string;
   metaDescription: string;
+  attributes?: { label: string; value: string }[];
+  highlights?: string[];
+  videoUrl?: string;
+  ingredients?: string;
+  storageInstructions?: string;
+  usageInstructions?: string;
+  replacementPolicy?: string;
   createdBy?: Types.ObjectId;
   updatedBy?: Types.ObjectId;
   deletedAt?: Date | null;
@@ -99,14 +109,32 @@ const productSchema = new Schema<ProductDocument>(
     tags: { type: [String], default: undefined },
     fallbackIcon: { type: String, trim: true },
     featured: { type: Boolean, default: false },
+    bestseller: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
     showOnHome: { type: Boolean, default: false },
     homeSection: { type: String, default: '', trim: true },
     displayOrder: { type: Number, default: 0 },
     weight: { type: Number, default: 0, min: 0 },
     unit: { type: String, default: '', trim: true },
+    deliveryMinutes: { type: Number, min: 0 },
+    rating: { type: Number, default: 0, min: 0, max: 5 },
     metaTitle: { type: String, default: '', trim: true },
     metaDescription: { type: String, default: '', trim: true },
+    attributes: {
+      type: [
+        {
+          label: { type: String, required: true },
+          value: { type: String, required: true },
+        },
+      ],
+      default: undefined,
+    },
+    highlights: { type: [String], default: undefined },
+    videoUrl: { type: String, default: '', trim: true },
+    ingredients: { type: String, default: '', trim: true },
+    storageInstructions: { type: String, default: '', trim: true },
+    usageInstructions: { type: String, default: '', trim: true },
+    replacementPolicy: { type: String, default: '', trim: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     deletedAt: { type: Date, default: null },
@@ -120,6 +148,7 @@ productSchema.index({ sku: 1 }, { unique: true });
 productSchema.index({ category: 1 });
 productSchema.index({ brand: 1 });
 productSchema.index({ featured: 1 });
+productSchema.index({ bestseller: 1 });
 productSchema.index({ showOnHome: 1 });
 productSchema.index({ displayOrder: 1 });
 

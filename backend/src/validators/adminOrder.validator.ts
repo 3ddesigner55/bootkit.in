@@ -25,7 +25,13 @@ export type AdminOrderListQuery = {
 };
 
 export type AdminOrderStatusInput = {
-  status: 'PLACED' | 'CONFIRMED' | 'PACKING' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
+  status:
+    | 'PLACED'
+    | 'CONFIRMED'
+    | 'PACKING'
+    | 'OUT_FOR_DELIVERY'
+    | 'DELIVERED'
+    | 'CANCELLED';
 };
 
 function validationError(message: string): ApiError {
@@ -136,6 +142,7 @@ export function validateAdminOrderStatus(
     'PACKING',
     'OUT_FOR_DELIVERY',
     'DELIVERED',
+    'CANCELLED',
   ];
 
   if (!allowedStatuses.includes(status as AdminOrderStatusInput['status'])) {

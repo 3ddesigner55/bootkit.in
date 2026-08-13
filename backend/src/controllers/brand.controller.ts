@@ -4,11 +4,15 @@ import { HTTP_STATUS } from '../constants/httpStatus';
 import {
   createBrand,
   deleteBrand,
+  getAdminBrands,
+  getBrandOptions,
   getBrandById,
   getBrands,
+  uploadBrandImages,
   updateBrand,
 } from '../services/brand.service';
 import { sendSuccess } from '../utils/apiResponse';
+import { validateAdminBrandListQuery } from '../validators/brand.validator';
 
 function getBrandId(request: Request): string {
   return Array.isArray(request.params.id) ? '' : request.params.id;
@@ -18,8 +22,9 @@ export async function getBrandsController(
   request: Request,
   response: Response,
 ) {
-  void request;
-  const brands = await getBrands();
+  const hub =
+    typeof request.query.hub === 'string' ? request.query.hub : undefined;
+  const brands = await getBrands(hub);
 
   return sendSuccess(
     response,
@@ -37,6 +42,36 @@ export async function getBrandController(request: Request, response: Response) {
     HTTP_STATUS.OK,
     brand,
     'Brand retrieved successfully.',
+  );
+}
+
+export async function getAdminBrandsController(
+  request: Request,
+  response: Response,
+) {
+  const brands = await getAdminBrands(
+    validateAdminBrandListQuery(request.query),
+  );
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.OK,
+    brands,
+    'Admin brands retrieved successfully.',
+  );
+}
+
+export async function getBrandOptionsController(
+  _request: Request,
+  response: Response,
+) {
+  const brands = await getBrandOptions();
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.OK,
+    brands,
+    'Brand options retrieved successfully.',
   );
 }
 
@@ -85,3 +120,24 @@ export async function deleteBrandController(
     'Brand deleted successfully.',
   );
 }
+
+export async function uploadBrandImagesController(
+  request: Request,
+  response: Response,
+) {
+  const uploadedFiles = request.files;
+  const files = Array.isArray(uploadedFiles) ? undefined : uploadedFiles;
+  const images = await uploadBrandImages({
+    logo: files?.logo?.[0] || request.file,
+    banner: files?.banner?.[0],
+  });
+
+  return sendSuccess(
+    response,
+    HTTP_STATUS.CREATED,
+    images,
+    'Brand image(s) uploaded successfully.',
+  );
+}
+
+export const uploadBrandLogoController = uploadBrandImagesController;

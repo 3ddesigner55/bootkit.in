@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { isValidObjectId } from 'mongoose';
 
 import { HTTP_STATUS } from '../constants/httpStatus';
 import type { ApiError } from '../types/api';
@@ -45,14 +46,23 @@ export type ProductInput = {
   tags?: string[];
   fallbackIcon?: string;
   featured?: boolean;
+  bestseller?: boolean;
   active?: boolean;
   showOnHome?: boolean;
   homeSection?: string;
   displayOrder?: number;
   weight?: number;
   unit?: string;
+  deliveryMinutes?: number;
   metaTitle?: string;
   metaDescription?: string;
+  attributes?: { label: string; value: string }[];
+  highlights?: string[];
+  videoUrl?: string;
+  ingredients?: string;
+  storageInstructions?: string;
+  usageInstructions?: string;
+  replacementPolicy?: string;
 };
 
 export type ProductUpdateInput = Partial<ProductInput>;
@@ -60,13 +70,26 @@ export type ProductUpdateInput = Partial<ProductInput>;
 export type ProductListQuery = {
   page: number;
   limit: number;
+  storeId?: string;
   search?: string;
   category?: string;
   brand?: string;
+  hub?: 'beauty' | 'electronics' | 'pharmacy' | 'decor' | 'kids' | 'gifting';
   featured?: boolean;
+  bestseller?: boolean;
   showOnHome?: boolean;
   active?: boolean;
-  sort: 'newest' | 'oldest' | 'price-asc' | 'price-desc' | 'display-order';
+  stockStatus?: 'in-stock' | 'out-of-stock' | 'low-stock';
+  sort:
+    | 'newest'
+    | 'oldest'
+    | 'price-asc'
+    | 'price-desc'
+    | 'name-asc'
+    | 'name-desc'
+    | 'stock-asc'
+    | 'stock-desc'
+    | 'display-order';
 };
 
 function validationError(message: string): ApiError {
@@ -310,6 +333,41 @@ function getOptionalVariants(
   });
 }
 
+function getOptionalAttributesArray(
+  input: Record<string, unknown>,
+): { label: string; value: string }[] | undefined {
+  const value = input.attributes;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw validationError('attributes must be an array.');
+  }
+
+  return value.map((item) => {
+    if (!item || typeof item !== 'object') {
+      throw validationError('attribute item must be an object.');
+    }
+
+    const obj = item as Record<string, unknown>;
+
+    if (typeof obj.label !== 'string' || !obj.label.trim()) {
+      throw validationError('attribute label is required.');
+    }
+
+    if (typeof obj.value !== 'string' || !obj.value.trim()) {
+      throw validationError('attribute value is required.');
+    }
+
+    return {
+      label: obj.label.trim(),
+      value: obj.value.trim(),
+    };
+  });
+}
+
 function getOptionalFields(
   input: Record<string, unknown>,
 ): Omit<ProductInput, 'name' | 'slug' | 'category' | 'sellingPrice' | 'stock'> {
@@ -329,14 +387,23 @@ function getOptionalFields(
   const tags = getOptionalStringArray(input, 'tags');
   const fallbackIcon = getOptionalString(input, 'fallbackIcon');
   const featured = getOptionalBoolean(input, 'featured');
+  const bestseller = getOptionalBoolean(input, 'bestseller');
   const active = getOptionalBoolean(input, 'active');
   const showOnHome = getOptionalBoolean(input, 'showOnHome');
   const homeSection = getOptionalString(input, 'homeSection');
   const displayOrder = getOptionalNumber(input, 'displayOrder', false);
   const weight = getOptionalNumber(input, 'weight');
   const unit = getOptionalString(input, 'unit');
+  const deliveryMinutes = getOptionalNumber(input, 'deliveryMinutes');
   const metaTitle = getOptionalString(input, 'metaTitle');
   const metaDescription = getOptionalString(input, 'metaDescription');
+  const attributes = getOptionalAttributesArray(input);
+  const highlights = getOptionalStringArray(input, 'highlights');
+  const videoUrl = getOptionalString(input, 'videoUrl');
+  const ingredients = getOptionalString(input, 'ingredients');
+  const storageInstructions = getOptionalString(input, 'storageInstructions');
+  const usageInstructions = getOptionalString(input, 'usageInstructions');
+  const replacementPolicy = getOptionalString(input, 'replacementPolicy');
 
   return {
     ...(description !== undefined ? { description } : {}),
@@ -355,14 +422,23 @@ function getOptionalFields(
     ...(tags !== undefined ? { tags } : {}),
     ...(fallbackIcon !== undefined ? { fallbackIcon } : {}),
     ...(featured !== undefined ? { featured } : {}),
+    ...(bestseller !== undefined ? { bestseller } : {}),
     ...(active !== undefined ? { active } : {}),
     ...(showOnHome !== undefined ? { showOnHome } : {}),
     ...(homeSection !== undefined ? { homeSection } : {}),
     ...(displayOrder !== undefined ? { displayOrder } : {}),
     ...(weight !== undefined ? { weight } : {}),
     ...(unit !== undefined ? { unit } : {}),
+    ...(deliveryMinutes !== undefined ? { deliveryMinutes } : {}),
     ...(metaTitle !== undefined ? { metaTitle } : {}),
     ...(metaDescription !== undefined ? { metaDescription } : {}),
+    ...(attributes !== undefined ? { attributes } : {}),
+    ...(highlights !== undefined ? { highlights } : {}),
+    ...(videoUrl !== undefined ? { videoUrl } : {}),
+    ...(ingredients !== undefined ? { ingredients } : {}),
+    ...(storageInstructions !== undefined ? { storageInstructions } : {}),
+    ...(usageInstructions !== undefined ? { usageInstructions } : {}),
+    ...(replacementPolicy !== undefined ? { replacementPolicy } : {}),
   };
 }
 
@@ -474,6 +550,10 @@ export function validateProductListQuery(input: unknown): ProductListQuery {
     'oldest',
     'price-asc',
     'price-desc',
+    'name-asc',
+    'name-desc',
+    'stock-asc',
+    'stock-desc',
     'display-order',
   ];
 
@@ -481,9 +561,47 @@ export function validateProductListQuery(input: unknown): ProductListQuery {
     throw validationError('sort is invalid.');
   }
 
+  const stockStatus = getQueryString(query.stockStatus, 'stockStatus');
+
+  if (
+    stockStatus !== undefined &&
+    stockStatus !== '' &&
+    !['in-stock', 'out-of-stock', 'low-stock'].includes(stockStatus)
+  ) {
+    throw validationError(
+      'stockStatus must be in-stock, out-of-stock, or low-stock.',
+    );
+  }
+
+  const hub = getQueryString(query.hub, 'hub')?.toLowerCase();
+  const validHubs: ProductListQuery['hub'][] = [
+    'beauty',
+    'electronics',
+    'pharmacy',
+    'decor',
+    'kids',
+    'gifting',
+  ];
+
+  if (
+    hub !== undefined &&
+    hub !== '' &&
+    !validHubs.includes(hub as ProductListQuery['hub'])
+  ) {
+    throw validationError(
+      'hub must be one of beauty, electronics, pharmacy, decor, kids, or gifting.',
+    );
+  }
+
+  const storeId = getQueryString(query.storeId, 'storeId');
+  if (storeId && !isValidObjectId(storeId)) {
+    throw validationError('storeId must be a valid ObjectId.');
+  }
+
   return {
     page,
     limit,
+    ...(storeId ? { storeId } : {}),
     ...(getQueryString(query.search, 'search')
       ? { search: getQueryString(query.search, 'search') }
       : {}),
@@ -493,14 +611,23 @@ export function validateProductListQuery(input: unknown): ProductListQuery {
     ...(getQueryString(query.brand, 'brand')
       ? { brand: getQueryString(query.brand, 'brand') }
       : {}),
+    ...(hub ? { hub: hub as ProductListQuery['hub'] } : {}),
     ...(getQueryBoolean(query.featured, 'featured') !== undefined
       ? { featured: getQueryBoolean(query.featured, 'featured') }
+      : {}),
+    ...(getQueryBoolean(query.bestseller, 'bestseller') !== undefined
+      ? { bestseller: getQueryBoolean(query.bestseller, 'bestseller') }
       : {}),
     ...(getQueryBoolean(query.showOnHome, 'showOnHome') !== undefined
       ? { showOnHome: getQueryBoolean(query.showOnHome, 'showOnHome') }
       : {}),
     ...(getQueryBoolean(query.active, 'active') !== undefined
       ? { active: getQueryBoolean(query.active, 'active') }
+      : {}),
+    ...(stockStatus
+      ? {
+          stockStatus: stockStatus as ProductListQuery['stockStatus'],
+        }
       : {}),
     sort: sortValue as ProductListQuery['sort'],
   };

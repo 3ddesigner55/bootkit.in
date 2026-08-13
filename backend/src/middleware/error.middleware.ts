@@ -11,7 +11,12 @@ export const errorMiddleware: ErrorRequestHandler = (
   next,
 ) => {
   void next;
-  const statusCode = error.statusCode ?? HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  const isMulterError = error.name === 'MulterError';
+  const statusCode =
+    error.statusCode ??
+    (isMulterError
+      ? HTTP_STATUS.BAD_REQUEST
+      : HTTP_STATUS.INTERNAL_SERVER_ERROR);
   const message =
     statusCode === HTTP_STATUS.INTERNAL_SERVER_ERROR
       ? 'Internal server error'

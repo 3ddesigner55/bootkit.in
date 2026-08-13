@@ -9,6 +9,9 @@ export type HeroBannerDocument = {
   buttonLink: string;
   displayOrder: number;
   showOnHome: boolean;
+  collectionHub?:
+    'beauty' | 'electronics' | 'pharmacy' | 'decor' | 'kids' | 'gifting' | null;
+  placement?: 'hero' | 'featuredThisWeek';
   startDate?: Date | null;
   endDate?: Date | null;
   active: boolean;
@@ -28,6 +31,24 @@ const heroBannerSchema = new Schema<HeroBannerDocument>(
     buttonLink: { type: String, default: '', trim: true },
     displayOrder: { type: Number, required: true },
     showOnHome: { type: Boolean, default: false },
+    placement: {
+      type: String,
+      enum: ['hero', 'featuredThisWeek'],
+      default: 'hero',
+    },
+    collectionHub: {
+      type: String,
+      enum: [
+        'beauty',
+        'electronics',
+        'pharmacy',
+        'decor',
+        'kids',
+        'gifting',
+        null,
+      ],
+      default: null,
+    },
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
     active: { type: Boolean, default: true },

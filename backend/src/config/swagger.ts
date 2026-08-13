@@ -304,6 +304,24 @@ const swaggerSpec = swaggerJSDoc({
           responses: { 200: { description: 'Default address updated' } },
         },
       },
+      '/orders/my-orders': {
+        get: {
+          tags: ['Orders'],
+          summary: 'Get customer order history',
+          security: bearerSecurity,
+          responses: { 200: { description: 'Customer orders retrieved' } },
+        },
+      },
+      '/orders/order-again': {
+        get: {
+          tags: ['Orders'],
+          summary: 'Get previous ordered products for quick reorder',
+          security: bearerSecurity,
+          responses: {
+            200: { description: 'Order again products retrieved' },
+          },
+        },
+      },
       '/orders': {
         post: {
           tags: ['Orders'],

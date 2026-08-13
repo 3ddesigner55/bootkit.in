@@ -1,6 +1,8 @@
+import { Types } from 'mongoose';
 import Order from '../models/order.model';
 import Product from '../models/product.model';
 import Store from '../models/store.model';
+import StoreInventory from '../models/storeInventory.model';
 import User from '../models/user.model';
 
 const INDIA_UTC_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -22,11 +24,23 @@ function getTodayRange(): { start: Date; end: Date } {
   };
 }
 
-export async function getAdminDashboardMetrics() {
+export async function getAdminDashboardMetrics(
+  allowedStoreIds?: string[] | null,
+) {
   const { start, end } = getTodayRange();
+  const isScoped = allowedStoreIds !== null && allowedStoreIds !== undefined;
+  const storeObjectIds = isScoped
+    ? allowedStoreIds.map((id) => new Types.ObjectId(id))
+    : [];
+
+  const baseOrderMatch: Record<string, unknown> = isScoped
+    ? { store: { $in: storeObjectIds } }
+    : {};
+
   const [orderMetrics, userMetrics, productMetrics, storeMetrics] =
     await Promise.all([
       Order.aggregate([
+        { $match: baseOrderMatch },
         {
           $facet: {
             totals: [
@@ -68,20 +82,50 @@ export async function getAdminDashboardMetrics() {
           },
         },
       ]),
-      User.aggregate([
-        { $match: { role: 'CUSTOMER', deletedAt: null } },
-        {
-          $facet: {
-            total: [{ $count: 'count' }],
-            today: [
-              { $match: { createdAt: { $gte: start, $lt: end } } },
-              { $count: 'count' },
-            ],
-          },
-        },
-      ]),
-      Product.aggregate([{ $match: { deletedAt: null } }, { $count: 'count' }]),
-      Store.aggregate([{ $match: { deletedAt: null } }, { $count: 'count' }]),
+      isScoped
+        ? Order.aggregate([
+            { $match: baseOrderMatch },
+            {
+              $facet: {
+                total: [{ $group: { _id: '$user' } }, { $count: 'count' }],
+                today: [
+                  { $match: { createdAt: { $gte: start, $lt: end } } },
+                  { $group: { _id: '$user' } },
+                  { $count: 'count' },
+                ],
+              },
+            },
+          ])
+        : User.aggregate([
+            { $match: { role: 'CUSTOMER', deletedAt: null } },
+            {
+              $facet: {
+                total: [{ $count: 'count' }],
+                today: [
+                  { $match: { createdAt: { $gte: start, $lt: end } } },
+                  { $count: 'count' },
+                ],
+              },
+            },
+          ]),
+      isScoped
+        ? StoreInventory.distinct('product', {
+            store: { $in: storeObjectIds },
+            deletedAt: null,
+          }).then((ids) => [{ count: ids.length }])
+        : Product.aggregate([
+            { $match: { deletedAt: null } },
+            { $count: 'count' },
+          ]),
+      isScoped
+        ? Store.aggregate([
+            { $match: { _id: { $in: storeObjectIds }, deletedAt: null } },
+            { $count: 'count' },
+          ])
+        : Store.aggregate([
+            { $match: { deletedAt: null } },
+            { $count: 'count' },
+          ]),
     ]);
 
   const orderSummary = orderMetrics[0];

@@ -13,7 +13,7 @@ const rateLimitHandler: RequestHandler = (_request, response) => {
 
 export const globalRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
-  limit: 100,
+  limit: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' ? 100000 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
@@ -21,7 +21,7 @@ export const globalRateLimiter = rateLimit({
 
 export const authenticationRateLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES,
-  limit: 10,
+  limit: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' ? 10000 : 10,
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
@@ -29,7 +29,7 @@ export const authenticationRateLimiter = rateLimit({
 
 export const apiSlowDown = slowDown({
   windowMs: FIFTEEN_MINUTES,
-  delayAfter: 50,
+  delayAfter: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' ? 100000 : 50,
   delayMs: (used) => (used - 50) * 500,
   maxDelayMs: 5000,
   legacyHeaders: false,

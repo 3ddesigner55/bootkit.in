@@ -8,6 +8,8 @@ export type PlaceOrderInput = {
   storeId: string;
   paymentMethod: 'COD' | 'RAZORPAY';
   couponCode?: string;
+  useWallet?: boolean;
+  idempotencyKey: string;
 };
 
 export type CancelOrderInput = {
@@ -30,7 +32,7 @@ function getObject(input: unknown): Record<string, unknown> {
 
 function getRequiredString(
   input: Record<string, unknown>,
-  field: 'addressId' | 'storeId',
+  field: 'addressId' | 'storeId' | 'idempotencyKey',
 ): string {
   const value = input[field];
 
@@ -45,6 +47,7 @@ export function validatePlaceOrder(input: unknown): PlaceOrderInput {
   const body = getObject(input);
   const paymentMethod = body.paymentMethod;
   const couponCode = body.couponCode;
+  const useWallet = body.useWallet;
 
   if (paymentMethod !== 'COD' && paymentMethod !== 'RAZORPAY') {
     throw validationError('paymentMethod must be COD or RAZORPAY.');
@@ -54,10 +57,16 @@ export function validatePlaceOrder(input: unknown): PlaceOrderInput {
     throw validationError('couponCode must be a string.');
   }
 
+  if (useWallet !== undefined && typeof useWallet !== 'boolean') {
+    throw validationError('useWallet must be a boolean.');
+  }
+
   return {
     addressId: getRequiredString(body, 'addressId'),
     storeId: getRequiredString(body, 'storeId'),
+    idempotencyKey: getRequiredString(body, 'idempotencyKey'),
     paymentMethod,
+    useWallet: !!useWallet,
     ...(couponCode?.trim() ? { couponCode: couponCode.trim() } : {}),
   };
 }
@@ -113,4 +122,36 @@ export function validateConfirmCodRequest(
 
   response.locals.confirmCodOrderNumber = orderNumber.trim();
   next();
+}
+
+export type MyOrdersQuery = {
+  page: number;
+  limit: number;
+};
+
+export function validateMyOrdersQuery(input: unknown): MyOrdersQuery {
+  const query = (
+    input && typeof input === 'object' && !Array.isArray(input) ? input : {}
+  ) as Record<string, unknown>;
+
+  const page = Math.max(1, Number.parseInt(String(query.page || '1'), 10) || 1);
+  const limit = Math.min(
+    50,
+    Math.max(1, Number.parseInt(String(query.limit || '10'), 10) || 10),
+  );
+
+  return { page, limit };
+}
+
+export function validateMyOrdersRequest(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): void {
+  try {
+    response.locals.myOrdersQuery = validateMyOrdersQuery(request.query);
+    next();
+  } catch (error) {
+    next(error);
+  }
 }

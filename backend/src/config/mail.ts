@@ -16,7 +16,10 @@ function getMailConfiguration(): MailConfiguration | null {
   const from = process.env.SMTP_FROM;
   const port = Number(process.env.SMTP_PORT ?? 587);
 
+  console.log('getMailConfiguration evaluation:', { host, user, passExists: !!pass, from, port });
+
   if (!host || !user || !pass || !from || !Number.isInteger(port) || port < 1) {
+    console.warn('getMailConfiguration failed check: missing variables.');
     return null;
   }
 

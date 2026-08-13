@@ -9,7 +9,9 @@ export async function getAdminDashboardMetricsController(
   response: Response,
 ) {
   void request;
-  const metrics = await getAdminDashboardMetrics();
+  const metrics = await getAdminDashboardMetrics(
+    response.locals.allowedStoreIds as string[] | null | undefined,
+  );
 
   return sendSuccess(
     response,

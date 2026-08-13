@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { isValidObjectId } from 'mongoose';
 
 import { HTTP_STATUS } from '../constants/httpStatus';
 import type { ApiError } from '../types/api';
@@ -7,6 +8,8 @@ export type AdminReportQuery = {
   from?: Date;
   to?: Date;
   store?: string;
+  brand?: string;
+  category?: string;
   groupBy: 'day' | 'week' | 'month';
 };
 
@@ -48,11 +51,30 @@ function getDate(value: unknown, field: 'from' | 'to'): Date | undefined {
   return date;
 }
 
+function getObjectId(
+  value: unknown,
+  field: 'brand' | 'category',
+): string | undefined {
+  const objectId = getQueryString(value, field);
+
+  if (!objectId) {
+    return undefined;
+  }
+
+  if (!isValidObjectId(objectId)) {
+    throw validationError(`${field} must be a valid ObjectId.`);
+  }
+
+  return objectId;
+}
+
 export function validateAdminReportQuery(input: unknown): AdminReportQuery {
   const query = input as Record<string, unknown>;
   const from = getDate(query.from, 'from');
   const to = getDate(query.to, 'to');
   const store = getQueryString(query.store, 'store');
+  const brand = getObjectId(query.brand, 'brand');
+  const category = getObjectId(query.category, 'category');
   const groupBy = getQueryString(query.groupBy, 'groupBy') || 'day';
 
   if (from && to && from > to) {
@@ -67,6 +89,8 @@ export function validateAdminReportQuery(input: unknown): AdminReportQuery {
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     ...(store ? { store } : {}),
+    ...(brand ? { brand } : {}),
+    ...(category ? { category } : {}),
     groupBy,
   };
 }

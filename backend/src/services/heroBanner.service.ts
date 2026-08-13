@@ -3,6 +3,7 @@ import { isValidObjectId } from 'mongoose';
 import { HTTP_STATUS } from '../constants/httpStatus';
 import HeroBanner from '../models/heroBanner.model';
 import type { ApiError } from '../types/api';
+import { uploadImage } from '../utils/upload';
 import type {
   HeroBannerInput,
   HeroBannerUpdateInput,
@@ -18,20 +19,29 @@ function validateHeroBannerId(id: string): void {
   }
 }
 
-export async function getPublicHeroBanners() {
+export async function getPublicHeroBanners(hub?: string) {
   const now = new Date();
 
-  return HeroBanner.find({
+  const filter: Record<string, unknown> = {
     active: true,
-    showOnHome: true,
     deletedAt: null,
     $and: [
       { $or: [{ startDate: null }, { startDate: { $lte: now } }] },
       { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
     ],
-  })
-    .sort({ displayOrder: 1 })
-    .lean();
+  };
+
+  if (hub) {
+    filter.collectionHub = hub.toLowerCase();
+  } else {
+    filter.showOnHome = true;
+    filter.$or = [
+      { collectionHub: null },
+      { collectionHub: { $exists: false } },
+    ];
+  }
+
+  return HeroBanner.find(filter).sort({ displayOrder: 1 }).lean();
 }
 
 export async function getAdminHeroBanners() {
@@ -54,7 +64,12 @@ export async function getAdminHeroBannerById(id: string) {
 }
 
 export async function createHeroBanner(input: HeroBannerInput, userId: string) {
-  return HeroBanner.create({ ...input, createdBy: userId, updatedBy: userId });
+  return HeroBanner.create({
+    ...input,
+    showOnHome: input.showOnHome ?? true,
+    createdBy: userId,
+    updatedBy: userId,
+  });
 }
 
 export async function updateHeroBanner(
@@ -91,4 +106,36 @@ export async function deleteHeroBanner(id: string, userId: string) {
   }
 
   return heroBanner;
+}
+
+type HeroBannerUploadFiles = {
+  desktopImage?: Express.Multer.File;
+  mobileImage?: Express.Multer.File;
+};
+
+export async function uploadHeroBannerImages(files: HeroBannerUploadFiles) {
+  if (!files.desktopImage && !files.mobileImage) {
+    throw serviceError(
+      'At least one hero banner image file is required.',
+      HTTP_STATUS.BAD_REQUEST,
+    );
+  }
+
+  const [desktopImage, mobileImage] = await Promise.all([
+    files.desktopImage
+      ? uploadImage(files.desktopImage.buffer, {
+          folder: 'bootkit/hero-banners',
+        })
+      : undefined,
+    files.mobileImage
+      ? uploadImage(files.mobileImage.buffer, {
+          folder: 'bootkit/hero-banners',
+        })
+      : undefined,
+  ]);
+
+  return {
+    ...(desktopImage ? { desktopImage: desktopImage.secureUrl } : {}),
+    ...(mobileImage ? { mobileImage: mobileImage.secureUrl } : {}),
+  };
 }

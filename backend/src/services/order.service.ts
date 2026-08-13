@@ -1,4 +1,9 @@
-import mongoose, { isValidObjectId, type HydratedDocument } from 'mongoose';
+import crypto from 'crypto';
+import mongoose, {
+  isValidObjectId,
+  type HydratedDocument,
+  type Types,
+} from 'mongoose';
 
 import { HTTP_STATUS } from '../constants/httpStatus';
 import Address from '../models/address.model';
@@ -7,9 +12,17 @@ import Order, {
   type OrderDocument,
   type OrderItem,
 } from '../models/order.model';
-import Product from '../models/product.model';
+import Product, { type ProductDocument } from '../models/product.model';
 import Store from '../models/store.model';
+import StoreInventory, {
+  type StoreInventoryDocument,
+} from '../models/storeInventory.model';
 import User from '../models/user.model';
+import Wallet from '../models/wallet.model';
+import WalletTransaction from '../models/walletTransaction.model';
+import Coupon from '../models/coupon.model';
+import CouponRedemption from '../models/couponRedemption.model';
+import { calculateOrderTotal } from './orderCalculation.service';
 import type { ApiError } from '../types/api';
 import {
   sendNotificationAsync,
@@ -18,13 +31,23 @@ import {
 } from './notification.service';
 import type {
   CancelOrderInput,
+  MyOrdersQuery,
   PlaceOrderInput,
 } from '../validators/order.validator';
 
 const ORDER_NUMBER_ATTEMPTS = 3;
 
-function serviceError(message: string, statusCode: number): ApiError {
-  return Object.assign(new Error(message), { statusCode });
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11000
+  );
+}
+
+function serviceError(message: string, statusCode: number, code?: string): ApiError {
+  return Object.assign(new Error(message), { statusCode, code });
 }
 
 function validateObjectId(value: string, name: string): void {
@@ -34,16 +57,38 @@ function validateObjectId(value: string, name: string): void {
 }
 
 function getOrderNumberPrefix(date: Date): string {
-  return `BK${date.toISOString().slice(0, 10).replaceAll('-', '')}`;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `BK${year}${month}${day}`;
 }
 
-function isDuplicateKeyError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 11000
-  );
+export function computeOrderRequestFingerprint(
+  userId: string,
+  input: PlaceOrderInput,
+  cartItems: CartItem[],
+): string {
+  const normalizedItems = cartItems
+    .map((item) => ({
+      productId: item.product.toString(),
+      quantity: item.quantity,
+    }))
+    .sort((a, b) => a.productId.localeCompare(b.productId));
+
+  const payload = {
+    userId,
+    addressId: input.addressId,
+    storeId: input.storeId,
+    paymentMethod: input.paymentMethod,
+    couponCode: input.couponCode || '',
+    items: normalizedItems,
+  };
+
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify(payload))
+    .digest('hex');
 }
 
 function notifyOrderCancellation(userId: string, orderNumber: string): void {
@@ -75,125 +120,282 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
   validateObjectId(input.addressId, 'Address');
   validateObjectId(input.storeId, 'Store');
 
-  for (let attempt = 0; attempt < ORDER_NUMBER_ATTEMPTS; attempt += 1) {
-    const session = await mongoose.startSession();
+  if (!input.idempotencyKey || !input.idempotencyKey.trim()) {
+    throw serviceError('idempotencyKey is required.', HTTP_STATUS.BAD_REQUEST);
+  }
 
-    try {
-      let createdOrder: HydratedDocument<OrderDocument> | undefined;
-      let orderPlacedNotification:
-        | { email: string; customerName: string; orderNumber: string }
-        | undefined;
+  const existingOrder = await Order.findOne({
+    user: userId,
+    idempotencyKey: input.idempotencyKey.trim(),
+  });
 
-      await session.withTransaction(async () => {
-        const [user, cart, address, store] = await Promise.all([
-          User.findOne({ _id: userId, isActive: true, deletedAt: null })
-            .select('email firstName')
-            .session(session),
-          Cart.findOne({ user: userId }).session(session),
-          Address.findOne({
-            _id: input.addressId,
-            user: userId,
-            deletedAt: null,
-          }).session(session),
-          Store.findOne({
-            _id: input.storeId,
-            active: true,
-            deletedAt: null,
-          }).session(session),
-        ]);
+  if (existingOrder) {
+    const currentCart = await Cart.findOne({ user: userId });
+    if (currentCart && currentCart.items.length > 0) {
+      const currentFingerprint = computeOrderRequestFingerprint(
+        userId,
+        input,
+        currentCart.items as CartItem[],
+      );
 
-        if (!user) {
-          throw serviceError('User not found.', HTTP_STATUS.NOT_FOUND);
-        }
-
-        if (!cart || cart.items.length === 0) {
-          throw serviceError('Cart is empty.', HTTP_STATUS.BAD_REQUEST);
-        }
-
-        if (!address) {
-          throw serviceError('Address not found.', HTTP_STATUS.NOT_FOUND);
-        }
-
-        if (!store) {
-          throw serviceError('Store not found.', HTTP_STATUS.NOT_FOUND);
-        }
-
-        const cartItems = cart.items as CartItem[];
-        const productIds = cartItems.map((item) => item.product);
-        const products = await Product.find({
-          _id: { $in: productIds },
-          active: true,
-          deletedAt: null,
-        }).session(session);
-        const productsById = new Map(
-          products.map((product) => [product.id, product]),
+      if (
+        existingOrder.requestFingerprint &&
+        existingOrder.requestFingerprint !== currentFingerprint
+      ) {
+        throw serviceError(
+          'Idempotency key has already been used with a different request payload.',
+          HTTP_STATUS.CONFLICT,
+          'IDEMPOTENCY_CONFLICT',
         );
+      }
+    }
 
-        if (productsById.size !== cartItems.length) {
+    return existingOrder;
+  }
+
+
+  for (let attempt = 0; attempt < ORDER_NUMBER_ATTEMPTS; attempt += 1) {
+    let createdOrder: HydratedDocument<OrderDocument> | undefined;
+    let orderPlacedNotification:
+      | { email: string; customerName: string; orderNumber: string }
+      | undefined;
+
+    const executeOrderCreation = async (session?: mongoose.ClientSession) => {
+      const userQuery = User.findOne({
+        _id: userId,
+        isActive: true,
+        deletedAt: null,
+      }).select('email firstName');
+      const cartQuery = Cart.findOne({ user: userId });
+      const addressQuery = Address.findOne({
+        _id: input.addressId,
+        user: userId,
+        deletedAt: null,
+      });
+      const storeQuery = Store.findOne({
+        _id: input.storeId,
+        active: true,
+        deletedAt: null,
+      });
+
+      if (session) {
+        userQuery.session(session);
+        cartQuery.session(session);
+        addressQuery.session(session);
+        storeQuery.session(session);
+      }
+
+      const [user, cart, address, store] = await Promise.all([
+        userQuery,
+        cartQuery,
+        addressQuery,
+        storeQuery,
+      ]);
+
+      if (!user) {
+        throw serviceError('User not found.', HTTP_STATUS.NOT_FOUND);
+      }
+
+      if (!cart || cart.items.length === 0) {
+        throw serviceError('Cart is empty.', HTTP_STATUS.BAD_REQUEST);
+      }
+
+      if (!address) {
+        throw serviceError('Address not found.', HTTP_STATUS.NOT_FOUND);
+      }
+
+      if (!store) {
+        throw serviceError('Store not found or inactive.', HTTP_STATUS.NOT_FOUND);
+      }
+
+      const cartItems = cart.items as CartItem[];
+      const productIds = cartItems.map((item) => item.product);
+
+      const prodQuery = Product.find({
+        _id: { $in: productIds },
+        active: true,
+        deletedAt: null,
+      });
+      const invQuery = StoreInventory.find({
+        store: input.storeId,
+        product: { $in: productIds },
+        active: true,
+        deletedAt: null,
+      });
+
+      if (session) {
+        prodQuery.session(session);
+        invQuery.session(session);
+      }
+
+      const [products, storeInventories] = await Promise.all([
+        prodQuery,
+        invQuery,
+      ]);
+
+      const productsById = new Map<string, HydratedDocument<ProductDocument>>(
+        products.map((product) => [product.id, product]),
+      );
+      const inventoriesByProductId = new Map<
+        string,
+        HydratedDocument<StoreInventoryDocument>
+      >(storeInventories.map((inv) => [inv.product.toString(), inv]));
+
+      if (productsById.size !== cartItems.length) {
+        throw serviceError(
+          'One or more cart products are unavailable.',
+          HTTP_STATUS.BAD_REQUEST,
+        );
+      }
+
+      const requestFingerprint = computeOrderRequestFingerprint(
+        userId,
+        input,
+        cartItems,
+      );
+
+      const orderItems: OrderItem[] = cartItems.map((cartItem) => {
+        const product = productsById.get(cartItem.product.toString());
+
+        if (!product) {
           throw serviceError(
             'One or more cart products are unavailable.',
             HTTP_STATUS.BAD_REQUEST,
           );
         }
 
-        const orderItems: OrderItem[] = cartItems.map((cartItem) => {
-          const product = productsById.get(cartItem.product.toString());
+        const inventory = inventoriesByProductId.get(product.id);
 
-          if (!product) {
+        if (!inventory || !inventory.active || inventory.deletedAt) {
+          throw serviceError(
+            `Product "${product.name}" is not available at the selected store.`,
+            HTTP_STATUS.BAD_REQUEST,
+          );
+        }
+
+        const availableStock = Math.max(
+          0,
+          inventory.stock - (inventory.reservedStock || 0),
+        );
+        if (availableStock < cartItem.quantity) {
+          throw serviceError(
+            `Insufficient stock for "${product.name}" at selected store (available: ${availableStock}, requested: ${cartItem.quantity}).`,
+            HTTP_STATUS.BAD_REQUEST,
+          );
+        }
+
+        const itemPrice = inventory.sellingPrice;
+        const itemMrp = inventory.mrp;
+
+        return {
+          product: product._id,
+          name: product.name,
+          thumbnail: product.thumbnail,
+          quantity: cartItem.quantity,
+          mrp: itemMrp,
+          sellingPrice: itemPrice,
+          total: itemPrice * cartItem.quantity,
+        };
+      });
+
+      const decrementedItems: Array<{
+        storeId: string;
+        productId: Types.ObjectId;
+        quantity: number;
+      }> = [];
+
+      try {
+        for (const cartItem of cartItems) {
+          const updateQuery = StoreInventory.updateOne(
+            {
+              store: input.storeId,
+              product: cartItem.product,
+              active: true,
+              deletedAt: null,
+              stock: { $gte: cartItem.quantity },
+            },
+            { $inc: { stock: -cartItem.quantity } },
+          );
+          if (session) updateQuery.session(session);
+          const res = await updateQuery;
+          if (res.modifiedCount !== 1) {
             throw serviceError(
-              'One or more cart products are unavailable.',
+              `Insufficient stock during checkout.`,
               HTTP_STATUS.BAD_REQUEST,
             );
           }
-
-          if (product.stock < cartItem.quantity) {
-            throw serviceError(
-              `Insufficient stock for ${product.name}.`,
-              HTTP_STATUS.BAD_REQUEST,
-            );
-          }
-
-          return {
-            product: product._id,
-            name: product.name,
-            thumbnail: product.thumbnail,
+          decrementedItems.push({
+            storeId: input.storeId,
+            productId: cartItem.product,
             quantity: cartItem.quantity,
-            mrp: product.mrp,
-            sellingPrice: product.sellingPrice,
-            total: product.sellingPrice * cartItem.quantity,
+          });
+        }
+
+        let calculation;
+        try {
+          calculation = await calculateOrderTotal({
+            storeId: input.storeId,
+            pincode: address.pincode,
+            addressId: input.addressId,
+            items: cartItems.map((item) => ({
+              productId: item.product.toString(),
+              quantity: item.quantity,
+            })),
+            couponCode: input.couponCode,
+            useWallet: input.useWallet,
+            userId,
+          });
+        } catch (calcErr: any) {
+          throw serviceError(calcErr.message, HTTP_STATUS.BAD_REQUEST);
+        }
+
+        const orderItemsWithTax = orderItems.map((item, idx) => {
+          const calcItem = calculation.itemDetails[idx];
+          return {
+            ...item,
+            tax: calcItem.tax,
+            cgst: calcItem.cgst,
+            sgst: calcItem.sgst,
+            igst: calcItem.igst,
           };
         });
-        const subtotal = orderItems.reduce(
-          (total, item) => total + item.total,
-          0,
-        );
+
         const prefix = getOrderNumberPrefix(new Date());
-        const orderCount = await Order.countDocuments({
+        const countQuery = Order.countDocuments({
           orderNumber: new RegExp(`^${prefix}`),
-        }).session(session);
+        });
+        if (session) countQuery.session(session);
+        const orderCount = await countQuery;
         const orderNumber = `${prefix}${String(orderCount + 1).padStart(4, '0')}`;
 
-        [createdOrder] = await Order.create(
-          [
-            {
-              orderNumber,
-              user: userId,
-              store: input.storeId,
-              address: input.addressId,
-              items: orderItems,
-              subtotal,
-              discount: 0,
-              deliveryCharge: 0,
-              tax: 0,
-              grandTotal: subtotal,
-              couponCode: input.couponCode ?? '',
-              couponDiscount: 0,
-              paymentMethod: input.paymentMethod,
-              status: 'PLACED',
-            },
-          ],
-          { session },
-        );
+        const orderData = {
+          orderNumber,
+          user: userId,
+          store: input.storeId,
+          address: input.addressId,
+          items: orderItemsWithTax,
+          subtotal: calculation.subtotal,
+          discount: calculation.discount,
+          deliveryCharge: calculation.deliveryCharge,
+          tax: calculation.tax,
+          cgst: calculation.cgst,
+          sgst: calculation.sgst,
+          igst: calculation.igst,
+          walletDebit: calculation.walletDebit,
+          grandTotal: calculation.grandTotal,
+          couponCode: calculation.appliedCoupon || '',
+          couponDiscount: calculation.couponDiscount,
+          paymentMethod: input.paymentMethod,
+          status: 'PLACED',
+          idempotencyKey: input.idempotencyKey.trim(),
+          requestFingerprint,
+        };
+
+        if (session) {
+          [createdOrder] = await Order.create([orderData], { session });
+        } else {
+          createdOrder = await Order.create(orderData);
+        }
 
         if (!createdOrder) {
           throw serviceError(
@@ -202,37 +404,116 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
           );
         }
 
+        // Deduct Wallet balance if useWallet was applied
+        if (calculation.walletDebit > 0) {
+          const wallet = await Wallet.findOne({ customer: userId });
+          if (wallet) {
+            const balanceBefore = wallet.balance;
+            wallet.balance -= calculation.walletDebit;
+            if (session) {
+              await wallet.save({ session });
+            } else {
+              await wallet.save();
+            }
+
+            const wTxData = {
+              customer: userId,
+              wallet: wallet._id,
+              direction: 'DEBIT' as const,
+              transactionType: 'ORDER_DEBIT',
+              amount: calculation.walletDebit,
+              idempotencyKey: `order-debit-${orderNumber}`,
+              adminReason: `Debit for Order #${orderNumber}`,
+              balanceBefore,
+              balanceAfter: wallet.balance,
+            };
+            if (session) {
+              await WalletTransaction.create([wTxData], { session });
+            } else {
+              await WalletTransaction.create(wTxData);
+            }
+          }
+        }
+
+        // Register Coupon Redemption if a coupon was successfully applied
+        if (calculation.appliedCoupon) {
+          const coupon = await Coupon.findOne({ code: calculation.appliedCoupon });
+          if (coupon) {
+            const redemptionData = {
+              coupon: coupon._id,
+              customer: userId,
+              order: createdOrder._id,
+              store: input.storeId,
+              discountAmount: calculation.couponDiscount,
+              status: 'REDEEMED' as const,
+              idempotencyKey: `coupon-redeem-${orderNumber}`,
+              reservedAt: new Date(),
+              redeemedAt: new Date(),
+            };
+            if (session) {
+              await CouponRedemption.create([redemptionData], { session });
+            } else {
+              await CouponRedemption.create(redemptionData);
+            }
+          }
+        }
+
         orderPlacedNotification = {
           email: user.email,
           customerName: user.firstName,
           orderNumber: createdOrder.orderNumber,
         };
 
-        for (const item of orderItems) {
-          const stockUpdate = await Product.updateOne(
-            {
-              _id: item.product,
-              active: true,
-              deletedAt: null,
-              stock: { $gte: item.quantity },
-            },
-            { $inc: { stock: -item.quantity } },
-            { session },
-          );
-
-          if (stockUpdate.modifiedCount !== 1) {
-            throw serviceError(
-              'One or more cart products are out of stock.',
-              HTTP_STATUS.BAD_REQUEST,
-            );
-          }
-        }
-
         cart.items = [];
         cart.totalItems = 0;
         cart.subtotal = 0;
-        await cart.save({ session });
-      });
+        cart.store = null;
+        if (session) {
+          await cart.save({ session });
+        } else {
+          await cart.save();
+        }
+      } catch (innerErr) {
+        if (!session || !session.inTransaction()) {
+          for (const item of decrementedItems) {
+            await StoreInventory.updateOne(
+              { store: item.storeId, product: item.productId },
+              { $inc: { stock: item.quantity } },
+            );
+          }
+        }
+        throw innerErr;
+      }
+    };
+
+    try {
+      const session = await mongoose.startSession();
+      try {
+        let isTxUnsupported = false;
+        try {
+          await session.withTransaction(async () => {
+            await executeOrderCreation(session);
+          });
+        } catch (txErr: any) {
+          if (
+            txErr?.code === 117 ||
+            txErr?.codeName === 'ConflictingOperationInProgress' ||
+            txErr?.message?.includes('active transaction number') ||
+            txErr?.message?.includes('sharded cluster') ||
+            txErr?.message?.includes('replica set')
+          ) {
+            isTxUnsupported = true;
+          } else {
+            throw txErr;
+          }
+        }
+
+        if (isTxUnsupported) {
+          await executeOrderCreation();
+        }
+      } finally {
+        await session.endSession();
+      }
 
       if (!createdOrder) {
         throw serviceError(
@@ -250,15 +531,24 @@ export async function placeOrder(userId: string, input: PlaceOrderInput) {
 
       return createdOrder;
     } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const existingOrder = await Order.findOne({
+          user: userId,
+          idempotencyKey: input.idempotencyKey.trim(),
+        });
+        if (existingOrder) {
+          return existingOrder;
+        }
+      }
+
       if (isDuplicateKeyError(error) && attempt < ORDER_NUMBER_ATTEMPTS - 1) {
         continue;
       }
 
       throw error;
-    } finally {
-      await session.endSession();
     }
   }
+
 
   throw serviceError(
     'Order could not be created.',
@@ -294,17 +584,49 @@ export async function cancelOrder(
       }
 
       for (const item of order.items) {
-        const stockUpdate = await Product.updateOne(
-          { _id: item.product },
+        const stockUpdate = await StoreInventory.updateOne(
+          { store: order.store, product: item.product },
           { $inc: { stock: item.quantity } },
           { session },
         );
 
         if (stockUpdate.modifiedCount !== 1) {
           throw serviceError(
-            'Order product not found.',
+            'Store inventory item not found.',
             HTTP_STATUS.BAD_REQUEST,
           );
+        }
+      }
+
+      // Invalidate/release coupon redemption
+      if (order.couponCode) {
+        await CouponRedemption.updateOne(
+          { order: order._id, status: 'REDEEMED' },
+          { status: 'CANCELLED', releasedAt: new Date() },
+          { session }
+        );
+      }
+
+      // Refund wallet balance if applicable
+      if (order.walletDebit && order.walletDebit > 0) {
+        const wallet = await Wallet.findOne({ customer: order.user }).session(session);
+        if (wallet) {
+          const balanceBefore = wallet.balance;
+          wallet.balance += order.walletDebit;
+          await wallet.save({ session });
+
+          const wTxData = {
+            customer: order.user,
+            wallet: wallet._id,
+            direction: 'CREDIT' as const,
+            transactionType: 'REFUND_CREDIT',
+            amount: order.walletDebit,
+            idempotencyKey: `order-cancel-refund-${order.orderNumber}`,
+            adminReason: `Refund for Cancelled Order #${order.orderNumber}`,
+            balanceBefore,
+            balanceAfter: wallet.balance,
+          };
+          await WalletTransaction.create([wTxData], { session });
         }
       }
 
@@ -365,5 +687,158 @@ export async function confirmCodOrder(userId: string, orderNumber: string) {
     orderNumber: order.orderNumber,
     status: order.status,
     paymentStatus: order.paymentStatus,
+  };
+}
+
+export async function getMyOrders(userId: string, query: MyOrdersQuery) {
+  const filter = { user: userId };
+  const skip = (query.page - 1) * query.limit;
+
+  const [total, orders] = await Promise.all([
+    Order.countDocuments(filter),
+    Order.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(query.limit)
+      .populate({
+        path: 'items.product',
+        select:
+          'name slug thumbnail unit sellingPrice mrp stock active deletedAt category brand',
+        populate: [
+          { path: 'category', select: 'name slug icon' },
+          { path: 'brand', select: 'name slug logo' },
+        ],
+      })
+      .populate({
+        path: 'address',
+        select:
+          'fullName phone houseNumber street area landmark city state pincode',
+      })
+      .lean(),
+  ]);
+
+  const items = orders.map((order) => ({
+    id: order._id.toString(),
+    orderNumber: order.orderNumber,
+    items: (order.items as OrderItem[]).map((item: OrderItem) => ({
+      product: item.product,
+      name: item.name,
+      thumbnail: item.thumbnail,
+      quantity: item.quantity,
+      mrp: item.mrp,
+      sellingPrice: item.sellingPrice,
+      total: item.total,
+    })),
+    subtotal: order.subtotal,
+    discount: order.discount,
+    deliveryCharge: order.deliveryCharge,
+    tax: order.tax,
+    grandTotal: order.grandTotal,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+    address: order.address,
+    estimatedDeliveryTime: order.estimatedDeliveryTime,
+    deliveredAt: order.deliveredAt,
+    cancelReason: order.cancelReason,
+    cancelledAt: order.cancelledAt,
+    createdAt: (order as unknown as { createdAt?: Date }).createdAt,
+    updatedAt: (order as unknown as { updatedAt?: Date }).updatedAt,
+  }));
+
+  return {
+    items,
+    pagination: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.ceil(total / query.limit) || 1,
+    },
+  };
+}
+
+export async function getOrderAgainProducts(userId: string) {
+  const orders = await Order.find({
+    user: userId,
+    status: { $ne: 'CANCELLED' },
+  })
+    .sort({ createdAt: -1 })
+    .select('items createdAt')
+    .lean();
+
+  const seen = new Set<string>();
+  const productIds: Types.ObjectId[] = [];
+
+  for (const order of orders) {
+    for (const item of order.items as OrderItem[]) {
+      if (item.product) {
+        const idStr = item.product.toString();
+        if (!seen.has(idStr)) {
+          seen.add(idStr);
+          productIds.push(item.product);
+        }
+      }
+    }
+  }
+
+  if (productIds.length === 0) {
+    return {
+      products: [],
+      categories: [],
+    };
+  }
+
+  const products = await Product.find({
+    _id: { $in: productIds },
+    active: true,
+    deletedAt: null,
+  })
+    .populate('category', 'name slug icon')
+    .populate('brand', 'name slug logo')
+    .lean();
+
+  const productMap = new Map(products.map((p) => [p._id.toString(), p]));
+  const orderedProducts = [];
+
+  for (const id of productIds) {
+    const product = productMap.get(id.toString());
+    if (product) {
+      orderedProducts.push(product);
+    }
+  }
+
+  const categoriesMap = new Map<
+    string,
+    { title: string; slug: string; count: number; images: string[] }
+  >();
+
+  for (const product of orderedProducts) {
+    const category = product.category as
+      | { _id: Types.ObjectId; name: string; slug: string; icon?: string }
+      | undefined;
+
+    if (category?.slug) {
+      const existing = categoriesMap.get(category.slug);
+      const thumbnail = product.thumbnail || product.gallery?.[0] || '';
+
+      if (existing) {
+        existing.count += 1;
+        if (thumbnail && existing.images.length < 4) {
+          existing.images.push(thumbnail);
+        }
+      } else {
+        categoriesMap.set(category.slug, {
+          title: category.name,
+          slug: category.slug,
+          count: 1,
+          images: thumbnail ? [thumbnail] : [],
+        });
+      }
+    }
+  }
+
+  return {
+    products: orderedProducts,
+    categories: Array.from(categoriesMap.values()),
   };
 }

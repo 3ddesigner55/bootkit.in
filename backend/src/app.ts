@@ -17,9 +17,11 @@ import {
   errorRequestLogger,
   requestLogger,
 } from './middleware/requestLogger.middleware';
+import { connectDatabase } from './config/database';
 import { adminBrandRoutes, brandRoutes } from './routes/brand.routes';
 import { authRoutes } from './routes/auth.routes';
 import { adminDashboardRoutes } from './routes/adminDashboard.routes';
+import { adminCustomerRoutes } from './routes/adminCustomer.routes';
 import { adminOrderRoutes } from './routes/adminOrder.routes';
 import { adminReportRoutes } from './routes/adminReport.routes';
 import { addressRoutes } from './routes/address.routes';
@@ -38,11 +40,33 @@ import { profileRoutes } from './routes/profile.routes';
 import { adminProductRoutes, productRoutes } from './routes/product.routes';
 import { searchRoutes } from './routes/search.routes';
 import { adminStoreRoutes, storeRoutes } from './routes/store.routes';
+import { adminStoreInventoryRoutes } from './routes/adminStoreInventory.routes';
+import { adminInventoryRoutes } from './routes/adminInventory.routes';
 import { docsRoutes } from './routes/docs.routes';
 import { wishlistRoutes } from './routes/wishlist.routes';
+import adminHomeConfigRoutes from './routes/adminHomeConfig.routes';
 import { webhookRoutes } from './routes/webhook.routes';
+import { riderLogisticsRoutes } from './routes/riderLogistics.routes';
+import { adminMarketingRoutes } from './routes/adminMarketing.routes';
+import { adminSettingsRoutes } from './routes/adminSettings.routes';
+import { adminCatalogImportRoutes } from './routes/catalogImport.routes';
+import { adminTicketRoutes } from './routes/adminTicket.routes';
+import { adminReturnsRoutes } from './routes/adminReturns.routes';
+import { adminRefundsRoutes } from './routes/adminRefunds.routes';
+import { serviceabilityRoutes } from './routes/serviceability.routes';
+
+
 
 const app = express();
+
+app.use(async (_request, _response, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.disable('x-powered-by');
 app.use(helmet());
@@ -58,6 +82,7 @@ app.use(
   express.raw({ type: 'application/json' }),
   webhookRoutes,
 );
+app.use('/api/admin/products/import/confirm', express.json({ limit: '2mb' }));
 app.use(express.json());
 app.use(hppMiddleware);
 app.use(mongoSanitizationMiddleware);
@@ -79,9 +104,13 @@ app.use('/api/products', productRoutes);
 app.use('/api/admin/products', adminProductRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/admin/stores', adminStoreRoutes);
+app.use('/api/admin/store-inventory', adminStoreInventoryRoutes);
+app.use('/api/admin/inventory', adminInventoryRoutes);
 app.use('/api/hero-banners', heroBannerRoutes);
 app.use('/api/admin/hero-banners', adminHeroBannerRoutes);
+app.use('/api/admin/home-config', adminHomeConfigRoutes);
 app.use('/api/home', homeRoutes);
+
 app.use('/api/catalog', catalogRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/profile', profileRoutes);
@@ -91,7 +120,17 @@ app.use('/api/addresses', addressRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
+app.use('/api/admin/customers', adminCustomerRoutes);
 app.use('/api/admin/reports', adminReportRoutes);
+app.use('/api/admin/riders', riderLogisticsRoutes);
+app.use('/api/admin/marketing', adminMarketingRoutes);
+app.use('/api/admin/settings', adminSettingsRoutes);
+app.use('/api/admin/catalog/import', adminCatalogImportRoutes);
+app.use('/api/admin/support/tickets', adminTicketRoutes);
+app.use('/api/admin/returns', adminReturnsRoutes);
+app.use('/api/admin/refunds', adminRefundsRoutes);
+app.use('/api/serviceability', serviceabilityRoutes);
+app.use('/api/customer/serviceability', serviceabilityRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payments', paymentVerificationRoutes);
 app.use('/api/docs', docsRoutes);

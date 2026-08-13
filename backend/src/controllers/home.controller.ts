@@ -5,8 +5,9 @@ import { getHomeData } from '../services/home.service';
 import { sendSuccess } from '../utils/apiResponse';
 
 export async function getHomeController(request: Request, response: Response) {
-  void request;
-  const homeData = await getHomeData();
+  const storeId = request.query.storeId as string | undefined;
+  const city = request.query.city as string | undefined;
+  const homeData = await getHomeData(storeId, city);
 
   return sendSuccess(
     response,
@@ -15,3 +16,4 @@ export async function getHomeController(request: Request, response: Response) {
     'Home data retrieved successfully.',
   );
 }
+

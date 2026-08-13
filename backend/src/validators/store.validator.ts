@@ -28,6 +28,7 @@ export type StoreInput = {
   displayOrder?: number;
   openingTime?: string;
   closingTime?: string;
+  seller?: string | null;
 };
 
 export type StoreUpdateInput = Partial<StoreInput>;
@@ -111,6 +112,41 @@ function getOptionalNumber(
   return value;
 }
 
+function validateDeliveryLocation(input: {
+  active: boolean;
+  latitude?: number;
+  longitude?: number;
+  deliveryRadius?: number;
+}): void {
+  if (input.deliveryRadius === undefined || input.deliveryRadius <= 0) {
+    throw validationError('deliveryRadius must be greater than 0.');
+  }
+
+  if (!input.active) {
+    return;
+  }
+
+  if (input.latitude === undefined || input.longitude === undefined) {
+    throw validationError(
+      'latitude and longitude are required for an active delivery store.',
+    );
+  }
+
+  if (input.latitude < -90 || input.latitude > 90) {
+    throw validationError('latitude must be between -90 and 90.');
+  }
+
+  if (input.longitude < -180 || input.longitude > 180) {
+    throw validationError('longitude must be between -180 and 180.');
+  }
+
+  if (input.latitude === 0 && input.longitude === 0) {
+    throw validationError(
+      'latitude and longitude cannot both be 0 for an active delivery store.',
+    );
+  }
+}
+
 function getOptionalBoolean(
   input: Record<string, unknown>,
   field: string,
@@ -153,6 +189,8 @@ function getOptionalFields(
   const displayOrder = getOptionalNumber(input, 'displayOrder');
   const openingTime = getOptionalString(input, 'openingTime');
   const closingTime = getOptionalString(input, 'closingTime');
+  const seller =
+    input.seller === null ? null : getOptionalString(input, 'seller');
 
   return {
     ...(description !== undefined ? { description } : {}),
@@ -173,13 +211,13 @@ function getOptionalFields(
     ...(displayOrder !== undefined ? { displayOrder } : {}),
     ...(openingTime !== undefined ? { openingTime } : {}),
     ...(closingTime !== undefined ? { closingTime } : {}),
+    ...(seller !== undefined ? { seller } : {}),
   };
 }
 
 export function validateStoreCreate(input: unknown): StoreInput {
   const body = getObject(input);
-
-  return {
+  const store = {
     name: getRequiredString(body, 'name'),
     slug: getRequiredString(body, 'slug').toLowerCase(),
     phone: getRequiredString(body, 'phone'),
@@ -188,6 +226,15 @@ export function validateStoreCreate(input: unknown): StoreInput {
     country: getRequiredString(body, 'country'),
     ...getOptionalFields(body),
   };
+
+  validateDeliveryLocation({
+    active: store.active ?? true,
+    latitude: store.latitude,
+    longitude: store.longitude,
+    deliveryRadius: store.deliveryRadius,
+  });
+
+  return store;
 }
 
 export function validateStoreUpdate(input: unknown): StoreUpdateInput {
