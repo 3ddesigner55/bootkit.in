@@ -19,8 +19,6 @@ import type {
   ProductAdminContextValue,
   ProductInput,
 } from "@/types/productAdmin";
-import { supabase } from "@/lib/supabase/client";
-
 export const ProductAdminContext =
   createContext<ProductAdminContextValue | null>(null);
 
@@ -280,22 +278,100 @@ export default function ProductAdminProvider({
   const [hydrated, setHydrated] =
     useState(false);
 
+ const getBackendConfig = useCallback(() => {
+  if (typeof window === "undefined") {
+    return {
+      apiBase: "",
+      token: "",
+      role: "",
+    };
+  }
+
+  const rawSession =
+    window.localStorage.getItem("bootkit_session_v1");
+
+  const session = rawSession
+    ? JSON.parse(rawSession)
+    : null;
+
+  const token = session?.accessToken || "";
+  const role =
+    typeof session?.role === "string"
+      ? session.role
+      : "";
+
+  const apiBase = (
+    process.env.NEXT_PUBLIC_API_BASE_URL || "/api"
+  ).replace(/\/$/, "");
+
+  return {
+    apiBase,
+    token,
+    role,
+  };
+}, []);
+
   useEffect(() => {
-    if (supabase) {
-      void supabase.from("products").select("id, name, slug, brand, category_slug, image_url, fallback_icon, unit_label, unit_value, mrp, price, stock, rating, review_count, delivery_minutes, featured, bestseller, active").order("created_at", { ascending: false }).then(({ data }) => {
-        setProducts(data?.length ? (data as DatabaseProduct[]).map(fromDatabaseProduct) : readStoredProducts());
-        setHydrated(true);
-      });
-      return;
-    }
+    const loadProducts = async () => {
+     try {
+  const { apiBase, token, role } =
+    getBackendConfig();
+
+  if (role !== "ADMIN" && role !== "OWNER") {
     setProducts(readStoredProducts());
     setHydrated(true);
-  }, []);
+    return;
+  }
+
+  if (!apiBase) {
+          setProducts(readStoredProducts());
+          setHydrated(true);
+          return;
+        }
+
+        const res = await fetch(`${apiBase}/admin/products?limit=1000`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const payload = await res.json();
+        if (payload?.success && Array.isArray(payload.data?.items)) {
+          const mapped = payload.data.items.map((p: any) => ({
+            id: p._id || p.id,
+            name: p.name,
+            slug: p.slug,
+            brand: p.brandName || p.brand?.name || "",
+            categorySlug: p.categorySlug || p.category?.slug || "",
+            image: p.thumbnail || p.image_url || "",
+            fallbackIcon: p.fallbackIcon || "",
+            unit: {
+              label: p.unit || "g",
+              value: p.weight || 0,
+            },
+            mrp: p.mrp || p.sellingPrice,
+            price: p.sellingPrice,
+            stock: p.stock || 0,
+            rating: p.rating || 4.5,
+            reviewCount: p.reviewCount || 0,
+            deliveryMinutes: p.deliveryMinutes || 10,
+            featured: !!p.featured,
+            bestseller: !!p.bestseller,
+            active: !!p.active,
+          }));
+          setProducts(mapped);
+        } else {
+          setProducts(readStoredProducts());
+        }
+      } catch (err) {
+        setProducts(readStoredProducts());
+      }
+      setHydrated(true);
+    };
+    void loadProducts();
+  }, [getBackendConfig]);
 
   useEffect(() => {
     if (!hydrated) return;
-
-    if (supabase) return;
+    const { apiBase } = getBackendConfig();
+    if (apiBase) return;
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
@@ -304,7 +380,7 @@ export default function ProductAdminProvider({
     } catch {
       // Storage failure should not break the app.
     }
-  }, [products, hydrated]);
+  }, [products, hydrated, getBackendConfig]);
 
   const activeProducts = useMemo(
     () =>
@@ -369,13 +445,28 @@ export default function ProductAdminProvider({
         );
       }
 
-      if (supabase) {
-        void supabase.from("products").insert(toDatabaseProduct(createdProduct));
+      const { apiBase, token } = getBackendConfig();
+      if (apiBase && token && createdProduct) {
+        void fetch(`${apiBase}/admin/products`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: (createdProduct as Product).name,
+            slug: (createdProduct as Product).slug,
+            sellingPrice: (createdProduct as Product).price,
+            mrp: (createdProduct as Product).mrp,
+            stock: (createdProduct as Product).stock,
+            active: (createdProduct as Product).active,
+          }),
+        });
       }
 
       return createdProduct;
     },
-    []
+    [getBackendConfig]
   );
 
   const updateProduct = useCallback(
@@ -417,13 +508,27 @@ export default function ProductAdminProvider({
         })
       );
 
-      if (updatedProduct && supabase) {
-        void supabase.from("products").update(toDatabaseProduct(updatedProduct)).eq("id", productId);
+      const { apiBase, token } = getBackendConfig();
+      if (updatedProduct && apiBase && token) {
+        void fetch(`${apiBase}/admin/products/${productId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            active: (updatedProduct as Product).active,
+            featured: (updatedProduct as Product).featured,
+            stock: (updatedProduct as Product).stock,
+            sellingPrice: (updatedProduct as Product).price,
+            mrp: (updatedProduct as Product).mrp,
+          }),
+        });
       }
 
       return updatedProduct;
     },
-    []
+    [getBackendConfig]
   );
 
   const removeProduct = useCallback(
@@ -434,9 +539,17 @@ export default function ProductAdminProvider({
             product.id !== productId
         )
       );
-      if (supabase) void supabase.from("products").delete().eq("id", productId);
+      const { apiBase, token } = getBackendConfig();
+      if (apiBase && token) {
+        void fetch(`${apiBase}/admin/products/${productId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
     },
-    []
+    [getBackendConfig]
   );
 
   const toggleProductActive = useCallback(

@@ -1,29 +1,28 @@
 "use client";
 
-import { useAdminCategories } from "@/hooks/useAdminCategories";
+import Image from "next/image";
+
 
 interface CategorySidebarProps {
   selected: string;
   onSelect: (slug: string) => void;
+  categories?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    icon?: string;
+    image?: string;
+  }>;
 }
 
 export default function CategorySidebar({
   selected,
   onSelect,
+  categories = [],
 }: CategorySidebarProps) {
-  const {
-    activeCategories,
-    hydrated,
-  } = useAdminCategories();
-
-  if (!hydrated) {
-    return null;
-  }
-
   return (
-   <aside className="h-full overflow-y-auto scrollbar-hide bg-white">
-
-      {activeCategories.map((category) => {
+    <aside className="h-full overflow-y-auto scrollbar-hide bg-white">
+      {categories.map((category) => {
         const active = selected === category.slug;
 
         return (
@@ -31,9 +30,7 @@ export default function CategorySidebar({
             key={category.id}
             onClick={() => onSelect(category.slug)}
             className={`relative flex w-full flex-col items-center border-b border-[#ECEFEC] px-2 py-4 transition ${
-              active
-                ? "bg-[#F5F7F5]"
-                : "bg-white"
+              active ? "bg-[#F5F7F5]" : "bg-white"
             }`}
           >
             {active && (
@@ -41,20 +38,28 @@ export default function CategorySidebar({
             )}
 
             <div
-              className={`mb-2 flex h-11 w-1 items-center justify-center rounded-xl text-xl transition ${
-                active
-                  ? "bg-[#E9F8EE]"
-                  : "bg-white"
+              className={`mb-2 flex h-11 w-11 items-center justify-center rounded-xl text-xl transition ${
+                active ? "bg-[#E9F8EE]" : "bg-white"
               }`}
             >
-              {category.icon}
+              {category.image ? (
+                <Image
+                  src={category.image}
+                  alt=""
+                  width={44}
+                  height={44}
+                  className="h-11 w-11 object-contain"
+                />
+              ) : category.icon ? (
+                category.icon
+              ) : (
+                <span className="sr-only">Category image unavailable</span>
+              )}
             </div>
 
             <span
               className={`text-center text-[11px] font-bold leading-4 ${
-                active
-                  ? "text-[var(--primary)]"
-                  : "text-gray-600"
+                active ? "text-[var(--primary)]" : "text-gray-600"
               }`}
             >
               {category.name}

@@ -18,6 +18,8 @@ export type SelectedLocation = {
 
 export type LocationContextValue = {
   location: SelectedLocation | null;
+  resolvedStoreId?: string | null;
+  setResolvedStoreId?: (storeId: string | null) => void;
   hydrated: boolean;
   modalOpen: boolean;
   openLocationModal: () => void;

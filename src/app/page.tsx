@@ -1,5 +1,6 @@
 import WebsiteHome from "@/components/website/WebsiteHome";
 import AppHome from "@/components/home/AppHome";
+import WelcomeLoginScreen from "@/components/welcome/WelcomeLoginScreen";
 
 export default function Home() {
   return (
@@ -15,6 +16,8 @@ export default function Home() {
       <div className="hidden lg:block">
         <WebsiteHome />
       </div>
+
+      <WelcomeLoginScreen />
     </>
   );
 }

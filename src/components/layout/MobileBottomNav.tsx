@@ -8,7 +8,6 @@ import {
   Heart,
   Home,
   RotateCcw,
-  UserRound,
 } from "lucide-react";
 import { useWishlist } from "@/hooks/useWishlist";
 import { cn } from "@/lib/utils";
@@ -34,6 +33,9 @@ export default function MobileBottomNav() {
   const hiddenRoutes = [
     "/checkout",
     "/order-success",
+    "/admin",
+    "/owner",
+    "/seller",
   ];
 
   const shouldHide = hiddenRoutes.some(
@@ -41,6 +43,7 @@ export default function MobileBottomNav() {
       pathname === route ||
       pathname.startsWith(`${route}/`)
   );
+
 
   useEffect(() => {
   let lastScrollY = window.scrollY;
@@ -72,13 +75,13 @@ export default function MobileBottomNav() {
       <nav
   aria-label="Mobile navigation"
   className={cn(
-    "safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-white/80 bg-white/95 shadow-[0_-10px_30px_rgba(15,23,18,0.12)] backdrop-blur-xl transition-transform duration-300 lg:hidden",
+    "safe-bottom fixed inset-x-0 bottom-0 z-50 rounded-t-[20px] border-t border-white/80 bg-white/95 shadow-[0_-10px_30px_rgba(15,23,18,0.12)] backdrop-blur-xl transition-transform duration-300 lg:hidden",
     showNav
       ? "translate-y-0"
       : "translate-y-full"
   )}
 >
-      <div className="grid h-[64px] grid-cols-5 items-center px-2">
+      <div className="grid h-[64px] grid-cols-4 items-center px-2">
         <NavigationItem
           label="Home"
           href="/"
@@ -114,17 +117,7 @@ export default function MobileBottomNav() {
           }
         />
 
-       <NavigationItem
-  label="Account"
-  href="/account"
-  icon={UserRound}
-  active={pathname.startsWith("/account")}
-  badge={
-    notificationsHydrated
-      ? unreadCount
-      : 0
-  }
-/>
+    
       </div>
       </nav>
 

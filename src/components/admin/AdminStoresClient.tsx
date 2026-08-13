@@ -14,7 +14,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
 import {
@@ -28,9 +28,18 @@ import AdminPagination from "@/components/admin/ui/AdminPagination";
 import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
 import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
 import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
+import { useAccount } from "@/hooks/useAccount";
+import {
+  createAdminStore,
+  deleteAdminStore,
+  getAdminStores,
+  updateAdminStore,
+  uploadAdminStoreImages,
+  type AdminStoreData,
+} from "@/services/adminStores.service";
 
 type StoreStatus = "Active" | "Inactive";
-type StoreFilter = "All" | StoreStatus;
+type StoreFilter = "All" | StoreStatus | "Featured";
 
 type AdminStore = {
   id: string;
@@ -46,66 +55,92 @@ type AdminStore = {
   pinCode: string;
   deliveryArea: string;
   workingHours: string;
+  country: string;
+  email: string;
+  managerPhone: string;
+  addressLine2: string;
+  featured: boolean;
+  displayOrder: number;
+  openingTime: string;
+  closingTime: string;
   logo: ImageUploaderItem[];
   banner: ImageUploaderItem[];
+  latitude: number;
+  longitude: number;
 };
 
-const initialStores: AdminStore[] = [
-  {
-    id: "store_001",
-    name: "BootKit Main Store",
-    code: "BKT-SDR-01",
-    managerName: "Rakesh Sharma",
-    contactNumber: "9876543210",
-    city: "Sardarshahar",
-    deliveryRadius: 8,
-    status: "Active",
-    address: "Main Market, Ward 12",
-    state: "Rajasthan",
-    pinCode: "331403",
-    deliveryArea: "Sardarshahar city and nearby wards",
-    workingHours: "8:00 AM - 10:00 PM",
-    logo: [],
-    banner: [],
-  },
-  {
-    id: "store_002",
-    name: "BootKit Churu Road",
-    code: "BKT-SDR-02",
-    managerName: "Poonam Verma",
-    contactNumber: "9876543211",
-    city: "Sardarshahar",
-    deliveryRadius: 5,
-    status: "Active",
-    address: "Churu Road, Near Bus Stand",
-    state: "Rajasthan",
-    pinCode: "331403",
-    deliveryArea: "Churu Road, Bus Stand and Station Road",
-    workingHours: "9:00 AM - 9:00 PM",
-    logo: [],
-    banner: [],
-  },
-  {
-    id: "store_003",
-    name: "BootKit Bidasar Road",
-    code: "BKT-SDR-03",
-    managerName: "Deepak Saini",
-    contactNumber: "9876543212",
-    city: "Sardarshahar",
-    deliveryRadius: 6,
-    status: "Inactive",
-    address: "Bidasar Road, New Colony",
-    state: "Rajasthan",
-    pinCode: "331403",
-    deliveryArea: "Bidasar Road and New Colony",
-    workingHours: "9:00 AM - 8:00 PM",
-    logo: [],
-    banner: [],
-  },
-];
-
-const filters: StoreFilter[] = ["All", "Active", "Inactive"];
+const filters: StoreFilter[] = ["All", "Active", "Inactive", "Featured"];
 const pageSize = 4;
+
+function createEmptyStore(): AdminStore {
+  return {
+    id: "",
+    name: "",
+    code: "",
+    managerName: "",
+    contactNumber: "",
+    city: "",
+    deliveryRadius: 1,
+    status: "Active",
+    address: "",
+    state: "",
+    pinCode: "",
+    deliveryArea: "",
+    workingHours: "",
+    country: "India",
+    email: "",
+    managerPhone: "",
+    addressLine2: "",
+    featured: false,
+    displayOrder: 0,
+    openingTime: "",
+    closingTime: "",
+    logo: [],
+    banner: [],
+    latitude: 0,
+    longitude: 0,
+  };
+}
+
+function toUploaderItems(url: string, id: string, name: string) {
+  return url
+    ? [{ id, url, name, progress: 100, status: "uploaded" as const }]
+    : [];
+}
+
+function toAdminStore(store: AdminStoreData): AdminStore {
+  return {
+    id: store.id,
+    name: store.name,
+    code: store.slug,
+    managerName: store.managerName,
+    contactNumber: store.phone,
+    city: store.city,
+    deliveryRadius: store.deliveryRadius,
+    status: store.active ? "Active" : "Inactive",
+    address: [store.addressLine1, store.addressLine2]
+      .filter(Boolean)
+      .join(", "),
+    state: store.state,
+    pinCode: store.postalCode,
+    deliveryArea: store.description,
+    workingHours: [store.openingTime, store.closingTime]
+      .filter(Boolean)
+      .join(" - "),
+    country: store.country,
+    email: store.email,
+    managerPhone: store.managerPhone,
+    addressLine2: store.addressLine2,
+    featured: store.featured,
+    displayOrder: store.displayOrder,
+    openingTime: store.openingTime,
+    closingTime: store.closingTime,
+    logo: toUploaderItems(store.logo, `logo-${store.id}`, "Store logo"),
+    banner: toUploaderItems(store.banner, `banner-${store.id}`, "Store banner"),
+    latitude: store.latitude,
+    longitude: store.longitude,
+  };
+}
 
 function StoreImage({
   items,
@@ -137,82 +172,250 @@ function StoreImage({
 }
 
 export default function AdminStoresClient() {
-  const [stores, setStores] = useState<AdminStore[]>(initialStores);
+  const { hydrated: accountHydrated, session } = useAccount();
+  const accessToken = session?.accessToken;
+  const [stores, setStores] = useState<AdminStore[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StoreFilter>("All");
   const [page, setPage] = useState(1);
   const [selectedStore, setSelectedStore] = useState<AdminStore | null>(null);
   const [message, setMessage] = useState("");
-  const [isLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
+  const [formStore, setFormStore] = useState<AdminStore | null>(null);
 
-  const filteredStores = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const loadStores = useCallback(async () => {
+    if (!accessToken) {
+      setStores([]);
+      setIsLoading(false);
+      return;
+    }
 
-    return stores.filter((store) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        [store.name, store.city].some((value) =>
-          value.toLowerCase().includes(normalizedQuery)
-        );
-      const matchesFilter =
-        filter === "All" || store.status === filter;
+    try {
+      setIsLoading(true);
+      const result = await getAdminStores(accessToken, {
+        page,
+        limit: pageSize,
+        search: query,
+        active:
+          filter === "Active"
+            ? true
+            : filter === "Inactive"
+              ? false
+              : undefined,
+        featured: filter === "Featured" ? true : undefined,
+      });
+      setStores(result.stores.map(toAdminStore));
+      setPagination({
+        page: result.pagination.page,
+        totalPages: result.pagination.totalPages,
+      });
+      setError("");
+    } catch (loadError) {
+      setStores([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Stores could not be loaded.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accessToken, filter, page, query]);
 
-      return matchesQuery && matchesFilter;
-    });
-  }, [filter, query, stores]);
+  useEffect(() => {
+    if (!accountHydrated) return;
+    void loadStores();
+  }, [accountHydrated, loadStores]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredStores.length / pageSize)
-  );
-  const visibleStores = filteredStores.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+  const filteredStores = stores;
+  const totalPages = pagination.totalPages;
+  const visibleStores = stores;
 
   const changeFilter = (nextFilter: StoreFilter) => {
     setFilter(nextFilter);
     setPage(1);
   };
 
-  const toggleStoreStatus = (store: AdminStore) => {
+  const toggleStoreStatus = async (store: AdminStore) => {
     const nextStatus: StoreStatus =
       store.status === "Active" ? "Inactive" : "Active";
 
-    setStores((current) =>
-      current.map((item) =>
-        item.id === store.id ? { ...item, status: nextStatus } : item
-      )
-    );
-    setSelectedStore((current) =>
-      current?.id === store.id
-        ? { ...current, status: nextStatus }
-        : current
-    );
-    setMessage(`${store.name} is ${nextStatus.toLowerCase()} in this preview session.`);
+    if (!accessToken) return;
+    try {
+      const updated = toAdminStore(
+        await updateAdminStore(accessToken, store.id, {
+          active: nextStatus === "Active",
+        }),
+      );
+      setStores((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setSelectedStore((current) =>
+        current?.id === updated.id ? updated : current,
+      );
+      setMessage(`${store.name} is ${nextStatus.toLowerCase()}.`);
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "Store could not be updated.",
+      );
+    }
   };
 
-  const deleteStore = (store: AdminStore) => {
-    setStores((current) => current.filter((item) => item.id !== store.id));
-    setSelectedStore((current) =>
-      current?.id === store.id ? null : current
-    );
-    setMessage(`${store.name} was removed in this preview session.`);
+  const deleteStore = async (store: AdminStore) => {
+    if (!accessToken) return;
+    try {
+      await deleteAdminStore(accessToken, store.id);
+      setStores((current) => current.filter((item) => item.id !== store.id));
+      setSelectedStore((current) =>
+        current?.id === store.id ? null : current,
+      );
+      setMessage(`${store.name} was removed.`);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Store could not be deleted.",
+      );
+    }
   };
 
   const updateStoreImages = (
     store: AdminStore,
     field: "logo" | "banner",
-    items: ImageUploaderItem[]
+    items: ImageUploaderItem[],
   ) => {
-    setStores((current) =>
-      current.map((item) =>
-        item.id === store.id ? { ...item, [field]: items } : item
-      )
-    );
-    setSelectedStore((current) =>
-      current?.id === store.id ? { ...current, [field]: items } : current
-    );
+    if (!accessToken) return;
+    const file = items.find((item) => item.file)?.file;
+    if (!file) return;
+
+    void uploadAdminStoreImages(accessToken, { [field]: file })
+      .then((images) => updateAdminStore(accessToken, store.id, images))
+      .then((updatedStore) => {
+        const updated = toAdminStore(updatedStore);
+        setStores((current) =>
+          current.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        setSelectedStore((current) =>
+          current?.id === updated.id ? updated : current,
+        );
+      })
+      .catch((uploadError) => {
+        setError(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "Store image could not be uploaded.",
+        );
+      });
+  };
+
+  const saveStore = async () => {
+    if (!formStore || !accessToken) return;
+    if (
+      !formStore.name.trim() ||
+      !formStore.code.trim() ||
+      !formStore.contactNumber.trim() ||
+      !formStore.city.trim() ||
+      !formStore.state.trim()
+    ) {
+      setError("Please complete the required store details.");
+      return;
+    }
+
+    if (
+      typeof formStore.deliveryRadius !== "number" ||
+      isNaN(formStore.deliveryRadius) ||
+      formStore.deliveryRadius <= 0
+    ) {
+      setError("Delivery radius must be greater than 0.");
+      return;
+    }
+
+    if (formStore.status === "Active") {
+      if (
+        typeof formStore.latitude !== "number" ||
+        isNaN(formStore.latitude) ||
+        formStore.latitude < -90 ||
+        formStore.latitude > 90 ||
+        formStore.latitude === 0
+      ) {
+        setError(
+          "Active store requires a valid latitude (-90 to 90, non-zero).",
+        );
+        return;
+      }
+      if (
+        typeof formStore.longitude !== "number" ||
+        isNaN(formStore.longitude) ||
+        formStore.longitude < -180 ||
+        formStore.longitude > 180 ||
+        formStore.longitude === 0
+      ) {
+        setError(
+          "Active store requires a valid longitude (-180 to 180, non-zero).",
+        );
+        return;
+      }
+    }
+
+    try {
+      const logoFile = formStore.logo.find((item) => item.file)?.file;
+      const bannerFile = formStore.banner.find((item) => item.file)?.file;
+      const images =
+        logoFile || bannerFile
+          ? await uploadAdminStoreImages(accessToken, {
+              logo: logoFile,
+              banner: bannerFile,
+            })
+          : {};
+      const payload = {
+        name: formStore.name.trim(),
+        slug: formStore.code.trim(),
+        description: formStore.deliveryArea.trim(),
+        logo: logoFile ? images.logo || "" : formStore.logo[0]?.url || "",
+        banner: bannerFile
+          ? images.banner || ""
+          : formStore.banner[0]?.url || "",
+        email: formStore.email.trim(),
+        phone: formStore.contactNumber.trim(),
+        addressLine1: formStore.address.trim(),
+        addressLine2: formStore.addressLine2.trim(),
+        city: formStore.city.trim(),
+        state: formStore.state.trim(),
+        country: formStore.country.trim() || "India",
+        postalCode: formStore.pinCode.trim(),
+        managerName: formStore.managerName.trim(),
+        managerPhone: formStore.managerPhone.trim(),
+        deliveryRadius: formStore.deliveryRadius,
+        featured: formStore.featured,
+        active: formStore.status === "Active",
+        displayOrder: formStore.displayOrder,
+        openingTime: formStore.openingTime.trim(),
+        closingTime: formStore.closingTime.trim(),
+        latitude: formStore.latitude,
+        longitude: formStore.longitude,
+      };
+      const saved = formStore.id
+        ? await updateAdminStore(accessToken, formStore.id, payload)
+        : await createAdminStore(accessToken, payload);
+      const nextStore = toAdminStore(saved);
+      setStores((current) =>
+        formStore.id
+          ? current.map((item) => (item.id === nextStore.id ? nextStore : item))
+          : [nextStore, ...current],
+      );
+      setFormStore(null);
+      setMessage(`${nextStore.name} saved successfully.`);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Store could not be saved.",
+      );
+    }
   };
 
   if (isLoading) {
@@ -238,9 +441,7 @@ export default function AdminStoresClient() {
             action={
               <AdminPrimaryButton
                 icon={<Plus size={15} />}
-                onClick={() =>
-                  setMessage("Store creation will be connected to the approved backend.")
-                }
+                onClick={() => setFormStore(createEmptyStore())}
               >
                 Add store
               </AdminPrimaryButton>
@@ -252,6 +453,21 @@ export default function AdminStoresClient() {
               <CheckCircle2 size={16} />
               {message}
             </div>
+          )}
+
+          {error && (
+            <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-[var(--danger)]">
+              {error}
+            </div>
+          )}
+
+          {formStore && (
+            <StoreFormDialog
+              store={formStore}
+              onChange={setFormStore}
+              onClose={() => setFormStore(null)}
+              onSave={() => void saveStore()}
+            />
           )}
 
           <section className="rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
@@ -323,10 +539,26 @@ export default function AdminStoresClient() {
                       </div>
 
                       <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                        <StoreDetail icon={<UserRound size={14} />} label="Manager" value={store.managerName} />
-                        <StoreDetail icon={<Phone size={14} />} label="Contact" value={store.contactNumber} />
-                        <StoreDetail icon={<MapPin size={14} />} label="City" value={store.city} />
-                        <StoreDetail icon={<Store size={14} />} label="Delivery radius" value={`${store.deliveryRadius} km`} />
+                        <StoreDetail
+                          icon={<UserRound size={14} />}
+                          label="Manager"
+                          value={store.managerName}
+                        />
+                        <StoreDetail
+                          icon={<Phone size={14} />}
+                          label="Contact"
+                          value={store.contactNumber}
+                        />
+                        <StoreDetail
+                          icon={<MapPin size={14} />}
+                          label="City"
+                          value={store.city}
+                        />
+                        <StoreDetail
+                          icon={<Store size={14} />}
+                          label="Delivery radius"
+                          value={`${store.deliveryRadius} km`}
+                        />
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--border)] pt-4">
@@ -338,12 +570,12 @@ export default function AdminStoresClient() {
                         <ActionButton
                           label="Edit"
                           icon={<Pencil size={14} />}
-                          onClick={() =>
-                            setMessage("Store editing will be connected to the approved backend.")
-                          }
+                          onClick={() => setFormStore(store)}
                         />
                         <ActionButton
-                          label={store.status === "Active" ? "Disable" : "Enable"}
+                          label={
+                            store.status === "Active" ? "Disable" : "Enable"
+                          }
                           icon={<Power size={14} />}
                           onClick={() => toggleStoreStatus(store)}
                         />
@@ -360,7 +592,11 @@ export default function AdminStoresClient() {
               </div>
             ) : (
               <AdminEmptyState
-                title={Boolean(query) || filter !== "All" ? "No stores found" : "No stores yet"}
+                title={
+                  Boolean(query) || filter !== "All"
+                    ? "No stores found"
+                    : "No stores yet"
+                }
                 description={
                   Boolean(query) || filter !== "All"
                     ? "Try changing the search or filter to see other stores."
@@ -377,7 +613,9 @@ export default function AdminStoresClient() {
               page={page}
               totalPages={totalPages}
               onPrevious={() => setPage((current) => Math.max(1, current - 1))}
-              onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+              onNext={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
             />
           )}
         </Container>
@@ -396,6 +634,170 @@ export default function AdminStoresClient() {
   );
 }
 
+function StoreFormDialog({
+  store,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  store: AdminStore;
+  onChange: (store: AdminStore) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const update = (field: keyof AdminStore, value: string | boolean) =>
+    onChange({ ...store, [field]: value });
+  const fields: Array<[keyof AdminStore, string, boolean?]> = [
+    ["name", "Store Name", true],
+    ["code", "Slug", true],
+    ["address", "Address"],
+    ["city", "City", true],
+    ["state", "State", true],
+    ["pinCode", "Pincode"],
+    ["managerName", "Manager Name"],
+    ["contactNumber", "Contact Number", true],
+    ["email", "Email"],
+    ["openingTime", "Opening Hours"],
+    ["closingTime", "Closing Hours"],
+  ];
+  return (
+    <section className="mb-5 rounded-[26px] border border-[var(--primary)] bg-white p-4 shadow-[var(--shadow-md)] sm:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">
+            {store.id ? "Editing store" : "New store"}
+          </p>
+          <h2 className="mt-1 text-xl font-black text-[var(--text-primary)]">
+            {store.id ? store.name : "Add store"}
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--surface-soft)]"
+        >
+          <X size={17} />
+        </button>
+      </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        {fields.map(([field, label, required]) => (
+          <label key={field} className="block">
+            <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
+              {label}
+              {required && <span className="ml-1 text-[var(--danger)]">*</span>}
+            </span>
+            <input
+              value={String(store[field] ?? "")}
+              onChange={(event) => update(field, event.target.value)}
+              className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold outline-none focus:border-[var(--primary)]"
+            />
+          </label>
+        ))}
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
+            Delivery Radius<span className="ml-1 text-[var(--danger)]">*</span>
+          </span>
+          <input
+            type="number"
+            value={store.deliveryRadius}
+            onChange={(event) =>
+              onChange({ ...store, deliveryRadius: Number(event.target.value) })
+            }
+            className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold outline-none focus:border-[var(--primary)]"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
+            Latitude
+            {store.status === "Active" && (
+              <span className="ml-1 text-[var(--danger)]">*</span>
+            )}
+          </span>
+          <input
+            type="number"
+            step="any"
+            value={store.latitude || ""}
+            onChange={(event) =>
+              onChange({ ...store, latitude: Number(event.target.value) })
+            }
+            className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold outline-none focus:border-[var(--primary)]"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
+            Longitude
+            {store.status === "Active" && (
+              <span className="ml-1 text-[var(--danger)]">*</span>
+            )}
+          </span>
+          <input
+            type="number"
+            step="any"
+            value={store.longitude || ""}
+            onChange={(event) =>
+              onChange({ ...store, longitude: Number(event.target.value) })
+            }
+            className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold outline-none focus:border-[var(--primary)]"
+          />
+        </label>
+        <ImageUploader
+          label="Store logo"
+          value={store.logo}
+          onChange={(logo) => onChange({ ...store, logo })}
+        />
+        <ImageUploader
+          label="Store banner"
+          value={store.banner}
+          onChange={(banner) => onChange({ ...store, banner })}
+        />
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <label className="flex items-center justify-between rounded-2xl bg-[var(--surface-soft)] p-4 text-xs font-black">
+          Active
+          <input
+            type="checkbox"
+            checked={store.status === "Active"}
+            onChange={(event) =>
+              onChange({
+                ...store,
+                status: event.target.checked ? "Active" : "Inactive",
+              })
+            }
+            className="h-4 w-4 accent-[var(--primary)]"
+          />
+        </label>
+        <label className="flex items-center justify-between rounded-2xl bg-[var(--surface-soft)] p-4 text-xs font-black">
+          Featured
+          <input
+            type="checkbox"
+            checked={store.featured}
+            onChange={(event) =>
+              onChange({ ...store, featured: event.target.checked })
+            }
+            className="h-4 w-4 accent-[var(--primary)]"
+          />
+        </label>
+      </div>
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          onClick={onSave}
+          className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-[var(--primary)] text-sm font-black text-white"
+        >
+          Save store
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-12 flex-1 items-center justify-center rounded-2xl border border-[var(--border)] text-sm font-black text-[var(--text-secondary)]"
+        >
+          Cancel
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function StoreDetail({
   icon,
   label,
@@ -409,9 +811,13 @@ function StoreDetail({
     <div className="min-w-0 rounded-xl bg-[var(--surface-soft)] px-3 py-2.5">
       <div className="mb-1 flex items-center gap-1.5 text-[var(--text-muted)]">
         {icon}
-        <span className="text-[9px] font-black uppercase tracking-[0.08em]">{label}</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.08em]">
+          {label}
+        </span>
       </div>
-      <p className="truncate text-xs font-bold text-[var(--text-secondary)]">{value}</p>
+      <p className="truncate text-xs font-bold text-[var(--text-secondary)]">
+        {value}
+      </p>
     </div>
   );
 }
@@ -457,11 +863,14 @@ function StoreDrawer({
   onUpdateImages: (
     store: AdminStore,
     field: "logo" | "banner",
-    items: ImageUploaderItem[]
+    items: ImageUploaderItem[],
   ) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/35" role="presentation">
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/35"
+      role="presentation"
+    >
       <aside
         aria-label="Store details"
         className="h-full w-full max-w-md overflow-y-auto bg-white p-5 shadow-[-16px_0_40px_rgba(0,0,0,0.15)] sm:p-6"
@@ -474,8 +883,12 @@ function StoreDrawer({
               className="flex h-12 w-12 shrink-0 rounded-xl object-cover"
             />
             <div className="min-w-0">
-              <h2 className="truncate text-lg font-black text-[var(--text-primary)]">{store.name}</h2>
-              <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">{store.code}</p>
+              <h2 className="truncate text-lg font-black text-[var(--text-primary)]">
+                {store.name}
+              </h2>
+              <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">
+                {store.code}
+              </p>
             </div>
           </div>
           <button
@@ -518,11 +931,21 @@ function StoreDrawer({
           <DrawerSection title="Address">
             <DrawerRow label="Address" value={store.address} />
             <DrawerRow label="City" value={store.city} />
-            <DrawerRow label="State / PIN" value={`${store.state} · ${store.pinCode}`} />
+            <DrawerRow
+              label="State / PIN"
+              value={`${store.state} · ${store.pinCode}`}
+            />
           </DrawerSection>
           <DrawerSection title="Delivery area">
             <DrawerRow label="Coverage" value={store.deliveryArea} />
-            <DrawerRow label="Delivery radius" value={`${store.deliveryRadius} km`} />
+            <DrawerRow
+              label="Delivery radius"
+              value={`${store.deliveryRadius} km`}
+            />
+            <DrawerRow
+              label="Coordinates (Lat/Lng)"
+              value={`${store.latitude || 0} / ${store.longitude || 0}`}
+            />
           </DrawerSection>
           <DrawerSection title="Contact details">
             <DrawerRow label="Contact number" value={store.contactNumber} />
@@ -570,7 +993,9 @@ function DrawerSection({
 }) {
   return (
     <section className="rounded-2xl border border-[var(--border)] p-4">
-      <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">{title}</h3>
+      <h3 className="mb-3 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">
+        {title}
+      </h3>
       <div className="space-y-2.5">{children}</div>
     </section>
   );
@@ -580,7 +1005,9 @@ function DrawerRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 text-xs">
       <span className="shrink-0 text-[var(--text-muted)]">{label}</span>
-      <span className="text-right font-bold text-[var(--text-secondary)]">{value}</span>
+      <span className="text-right font-bold text-[var(--text-secondary)]">
+        {value}
+      </span>
     </div>
   );
 }

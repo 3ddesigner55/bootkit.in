@@ -1,10 +1,13 @@
 import type { Product } from "@/types/product";
 
 export type ProductCollectionCategory = {
+  id?: string;
   title: string;
+  slug?: string;
   count?: string;
   images: string[];
-  matches: (product: Product) => boolean;
+  /** Legacy local collections use this client-only matcher. */
+  matches?: (product: Product) => boolean;
 };
 
 export const BEST_SELLER_CATEGORIES: ProductCollectionCategory[] = [
@@ -67,7 +70,7 @@ export const BEST_SELLER_CATEGORIES: ProductCollectionCategory[] = [
     matches: (product) => product.categorySlug === "snacks-munchies",
   },
   {
-    title: "More",
+    title: "Ice & More",
     count: "100+ Items",
     images: [
       "/images/products/apple.jpg",

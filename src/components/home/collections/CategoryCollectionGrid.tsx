@@ -1,23 +1,34 @@
 "use client";
 
-import { useAdminCategories } from "@/hooks/useAdminCategories";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { getCategories } from "@/services/category.service";
+import { getProducts } from "@/services/product.service";
+import { useEffect, useState } from "react";
 import CategoryCollectionCard from "./CategoryCollectionCard";
 
 export default function CategoryCollectionGrid() {
-  const {
-    activeCategories,
-    hydrated: categoriesReady,
-  } = useAdminCategories();
+  const [activeCategories, setActiveCategories] = useState<any[]>([]);
+  const [activeProducts, setActiveProducts] = useState<any[]>([]);
+  const [ready, setReady] = useState(false);
 
-  const {
-    activeProducts,
-    hydrated: productsReady,
-  } = useAdminProducts();
+  useEffect(() => {
+    Promise.all([
+      getCategories(),
+      getProducts({ limit: 100 }).then((res) => res.items)
+    ])
+      .then(([cats, prods]) => {
+        setActiveCategories(cats);
+        setActiveProducts(prods);
+        setReady(true);
+      })
+      .catch(() => {
+        setReady(true);
+      });
+  }, []);
 
-  if (!categoriesReady || !productsReady) {
+  if (!ready) {
     return null;
   }
+
 
   return (
     <section className="mt-6">

@@ -9,7 +9,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
 import {
@@ -21,24 +21,21 @@ import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
 import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
 import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
 import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
+import { useAccount } from "@/hooks/useAccount";
+import {
+  createAdminHeroBanner,
+  deleteAdminHeroBanner,
+  getAdminHeroBanners,
+  updateAdminHeroBanner,
+  uploadAdminHeroBannerImages,
+  type AdminHeroBanner,
+} from "@/services/adminHeroBanners.service";
 
-type HeroBanner = {
-  id: string;
-  image: string;
-  mobileImage: string;
-  title: string;
-  subtitle: string;
-  buttonText: string;
-  buttonLink: string;
-  displayOrder: number;
-  active: boolean;
-};
+type HeroBanner = AdminHeroBanner;
 
-type HeroBannerForm = Omit<
-  HeroBanner,
-  "id" | "displayOrder"
-> & {
+type HeroBannerForm = Omit<HeroBanner, "id" | "displayOrder"> & {
   displayOrder: string;
+  collectionHub: string;
 };
 
 const emptyForm: HeroBannerForm = {
@@ -49,13 +46,14 @@ const emptyForm: HeroBannerForm = {
   buttonText: "Shop now",
   buttonLink: "/products",
   displayOrder: "0",
+  collectionHub: "",
   active: true,
 };
 
 function toUploaderValue(
   url: string,
   id: string,
-  name: string
+  name: string,
 ): ImageUploaderItem[] {
   if (!url) return [];
 
@@ -71,14 +69,49 @@ function toUploaderValue(
 }
 
 export default function AdminHeroBannersClient() {
+  const { hydrated: accountHydrated, session } = useAccount();
+  const accessToken = session?.accessToken;
   const [banners, setBanners] = useState<HeroBanner[]>([]);
   const [formOpen, setFormOpen] = useState(false);
-  const [editingBanner, setEditingBanner] =
-    useState<HeroBanner | null>(null);
+  const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null);
   const [form, setForm] = useState<HeroBannerForm>(emptyForm);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [desktopImageItems, setDesktopImageItems] = useState<
+    ImageUploaderItem[]
+  >([]);
+  const [mobileImageItems, setMobileImageItems] = useState<ImageUploaderItem[]>(
+    [],
+  );
+
+  const loadBanners = useCallback(async () => {
+    if (!accessToken) {
+      setBanners([]);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setBanners(await getAdminHeroBanners(accessToken));
+      setError("");
+    } catch (loadError) {
+      setBanners([]);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Hero banners could not be loaded.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accountHydrated) return;
+    void loadBanners();
+  }, [accountHydrated, loadBanners]);
 
   const openAddForm = () => {
     setEditingBanner(null);
@@ -88,6 +121,8 @@ export default function AdminHeroBannersClient() {
     });
     setError("");
     setMessage("");
+    setDesktopImageItems([]);
+    setMobileImageItems([]);
     setFormOpen(true);
   };
 
@@ -101,10 +136,21 @@ export default function AdminHeroBannersClient() {
       buttonText: banner.buttonText,
       buttonLink: banner.buttonLink,
       displayOrder: String(banner.displayOrder),
+      collectionHub: banner.collectionHub ?? "",
       active: banner.active,
     });
     setError("");
     setMessage("");
+    setDesktopImageItems(
+      toUploaderValue(banner.image, "hero-banner-image", "Hero banner image"),
+    );
+    setMobileImageItems(
+      toUploaderValue(
+        banner.mobileImage,
+        "hero-banner-mobile-image",
+        "Mobile hero banner image",
+      ),
+    );
     setFormOpen(true);
   };
 
@@ -113,9 +159,11 @@ export default function AdminHeroBannersClient() {
     setEditingBanner(null);
     setForm(emptyForm);
     setError("");
+    setDesktopImageItems([]);
+    setMobileImageItems([]);
   };
 
-  const saveBanner = (event: FormEvent<HTMLFormElement>) => {
+  const saveBanner = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!form.title.trim()) {
@@ -130,43 +178,87 @@ export default function AdminHeroBannersClient() {
       return;
     }
 
-    const nextBanner: HeroBanner = {
-      id:
-        editingBanner?.id ??
-        `hero_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      image: form.image,
-      mobileImage: form.mobileImage,
-      title: form.title.trim(),
-      subtitle: form.subtitle.trim(),
-      buttonText: form.buttonText.trim(),
-      buttonLink: form.buttonLink.trim(),
-      displayOrder,
-      active: form.active,
-    };
+    if (!accessToken) {
+      setError("Your session has expired. Please sign in again.");
+      return;
+    }
 
-    setBanners((current) =>
-      editingBanner
-        ? current.map((banner) =>
-            banner.id === editingBanner.id
-              ? nextBanner
-              : banner
-          )
-        : [...current, nextBanner]
-    );
+    try {
+      const desktopImageFile = desktopImageItems.find(
+        (item) => item.file,
+      )?.file;
+      const mobileImageFile = mobileImageItems.find((item) => item.file)?.file;
+      const uploadedImages =
+        desktopImageFile || mobileImageFile
+          ? await uploadAdminHeroBannerImages(accessToken, {
+              desktopImage: desktopImageFile,
+              mobileImage: mobileImageFile,
+            })
+          : {};
+      const desktopImage = desktopImageFile
+        ? uploadedImages.desktopImage || ""
+        : desktopImageItems[0]?.url || form.image;
+      const mobileImage = mobileImageFile
+        ? uploadedImages.mobileImage || ""
+        : mobileImageItems[0]?.url || form.mobileImage;
 
-    setMessage(
-      `${nextBanner.title} ${
-        editingBanner ? "updated" : "added"
-      } in this preview session.`
-    );
-    closeForm();
+      if (!desktopImage) {
+        setError("Please upload a banner image.");
+        return;
+      }
+
+      const payload = {
+        desktopImage,
+        mobileImage,
+        title: form.title.trim(),
+        subtitle: form.subtitle.trim(),
+        buttonText: form.buttonText.trim(),
+        buttonLink: form.buttonLink.trim(),
+        displayOrder,
+        collectionHub: form.collectionHub ? form.collectionHub : null,
+        active: form.active,
+      };
+      const nextBanner = editingBanner
+        ? await updateAdminHeroBanner(accessToken, editingBanner.id, payload)
+        : await createAdminHeroBanner(accessToken, payload);
+
+      setBanners((current) =>
+        editingBanner
+          ? current.map((banner) =>
+              banner.id === editingBanner.id ? nextBanner : banner,
+            )
+          : [...current, nextBanner],
+      );
+      setMessage(
+        `${nextBanner.title} ${editingBanner ? "updated" : "added"} successfully.`,
+      );
+      closeForm();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Hero banner could not be saved.",
+      );
+    }
   };
 
-  const deleteBanner = (banner: HeroBanner) => {
-    setBanners((current) =>
-      current.filter((item) => item.id !== banner.id)
-    );
-    setMessage(`${banner.title} removed from this preview session.`);
+  const deleteBanner = async (banner: HeroBanner) => {
+    if (!accessToken) {
+      setError("Your session has expired. Please sign in again.");
+      return;
+    }
+
+    try {
+      await deleteAdminHeroBanner(accessToken, banner.id);
+      setBanners((current) => current.filter((item) => item.id !== banner.id));
+      setMessage(`${banner.title} removed successfully.`);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Hero banner could not be deleted.",
+      );
+    }
   };
 
   return (
@@ -179,7 +271,10 @@ export default function AdminHeroBannersClient() {
             title="Hero banners"
             description="Create and organize storefront banners"
             action={
-              <AdminPrimaryButton icon={<Plus size={15} />} onClick={openAddForm}>
+              <AdminPrimaryButton
+                icon={<Plus size={15} />}
+                onClick={openAddForm}
+              >
                 Add banner
               </AdminPrimaryButton>
             }
@@ -218,32 +313,14 @@ export default function AdminHeroBannersClient() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <ImageUploader
                     label="Banner Image"
-                    value={toUploaderValue(
-                      form.image,
-                      "hero-banner-image",
-                      "Hero banner image"
-                    )}
-                    onChange={(items) =>
-                      setForm((current) => ({
-                        ...current,
-                        image: items[0]?.url ?? "",
-                      }))
-                    }
+                    value={desktopImageItems}
+                    onChange={setDesktopImageItems}
                   />
 
                   <ImageUploader
                     label="Mobile Banner Image"
-                    value={toUploaderValue(
-                      form.mobileImage,
-                      "hero-banner-mobile-image",
-                      "Mobile hero banner image"
-                    )}
-                    onChange={(items) =>
-                      setForm((current) => ({
-                        ...current,
-                        mobileImage: items[0]?.url ?? "",
-                      }))
-                    }
+                    value={mobileImageItems}
+                    onChange={setMobileImageItems}
                   />
 
                   <BannerField
@@ -308,6 +385,30 @@ export default function AdminHeroBannersClient() {
                     }
                   />
 
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
+                      Collection Hub
+                    </span>
+                    <select
+                      value={form.collectionHub}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          collectionHub: event.target.value,
+                        }))
+                      }
+                      className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold text-[var(--text-primary)] outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
+                    >
+                      <option value="">Home (Default)</option>
+                      <option value="beauty">Beauty</option>
+                      <option value="electronics">Electronics</option>
+                      <option value="pharmacy">Pharmacy</option>
+                      <option value="decor">Decor</option>
+                      <option value="kids">Kids</option>
+                      <option value="gifting">Gifting</option>
+                    </select>
+                  </label>
+
                   <label className="flex items-end">
                     <span className="flex h-12 w-full items-center justify-between rounded-xl bg-[var(--surface-soft)] px-4">
                       <span>
@@ -334,7 +435,10 @@ export default function AdminHeroBannersClient() {
                 </div>
 
                 {error && (
-                  <p role="alert" className="mt-4 text-xs font-bold text-[var(--danger)]">
+                  <p
+                    role="alert"
+                    className="mt-4 text-xs font-bold text-[var(--danger)]"
+                  >
                     {error}
                   </p>
                 )}
@@ -361,7 +465,10 @@ export default function AdminHeroBannersClient() {
           )}
 
           {isLoading ? (
-            <AdminLoadingSkeleton count={3} className="[&>div]:h-80 md:grid-cols-2" />
+            <AdminLoadingSkeleton
+              count={3}
+              className="[&>div]:h-80 md:grid-cols-2"
+            />
           ) : banners.length === 0 ? (
             <AdminEmptyState
               title="No hero banners yet"
@@ -408,9 +515,7 @@ function BannerField({
     <label className="block">
       <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
         {label}
-        {required && (
-          <span className="ml-1 text-[var(--danger)]">*</span>
-        )}
+        {required && <span className="ml-1 text-[var(--danger)]">*</span>}
       </span>
       <input
         type="text"
@@ -471,7 +576,9 @@ function BannerCard({
         </div>
 
         <p className="mt-3 text-[10px] text-[var(--text-muted)]">
-          Order {banner.displayOrder} · {banner.buttonText || "No button"}
+          Order {banner.displayOrder} ·{" "}
+          {banner.collectionHub ? banner.collectionHub.toUpperCase() : "HOME"} ·{" "}
+          {banner.buttonText || "No button"}
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">

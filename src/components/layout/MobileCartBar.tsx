@@ -25,7 +25,15 @@ export default function MobileCartBar() {
   const pathname = usePathname();
   const { items, totalItems, hydrated } = useCart();
   const shouldHide =
-    pathname === "/cart" || pathname.startsWith("/checkout");
+    pathname === "/cart" ||
+    pathname.startsWith("/checkout") ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname === "/owner" ||
+    pathname.startsWith("/owner/") ||
+    pathname === "/seller" ||
+    pathname.startsWith("/seller/");
+
 
   if (!hydrated || items.length === 0 || shouldHide) {
     return null;

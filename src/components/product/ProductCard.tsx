@@ -139,7 +139,7 @@ const [drawerOpen, setDrawerOpen] = useState(false);
         : "shadow-[var(--shadow-xs)] hover:shadow-xl"
     }`}>
       <div className="relative">
-        {!isBestSellerPopup && "f"}
+        
          <button
   type="button"
   onClick={() => {
@@ -358,41 +358,28 @@ const [drawerOpen, setDrawerOpen] = useState(false);
           </h3>
         </Link>
 
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-[var(--text-muted)]">
-            {product.unit.label}
-          </span>
-
-          <span className="flex items-center gap-1 text-[10px] font-bold text-[var(--text-secondary)]">
-           <div className="flex items-center gap-1 rounded-full bg-[#FFF7E0] px-2 py-1">
-  <Star
-    size={11}
-    fill="currentColor"
-    className="text-[#F59E0B]"
-  />
-
-  <span className="text-[10px] font-bold">
-    {product.rating}
+        <div className="mt-2 flex items-center justify-between">
+  <span className="text-[12px] font-semibold text-[var(--text-muted)]">
+    {product.unit.label}
   </span>
+
+  {cartControl}
 </div>
-            {!isBestSellerPopup && product.rating}
-          </span>
-        </div>
 
         <div className="mt-auto flex items-end justify-between gap-2 pt-4">
-          <div className="min-w-0">
-            <p className="text-[18px] font-black tracking-[-0.025em] text-[var(--text-primary)] sm:text-base">
-              {formatPrice(product.price)}
-            </p>
+          <div className="mt-3">
+  <p className="text-[18px] font-black tracking-[-0.025em] text-[var(--text-primary)]">
+    {formatPrice(product.price)}
+  </p>
 
-            {product.mrp > product.price && (
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--text-muted)] line-through">
-                {formatPrice(product.mrp)}
-              </p>
-            )}
-          </div>
+  {product.mrp > product.price && (
+    <p className="mt-0.5 text-[11px] font-medium text-[var(--text-muted)] line-through">
+      {formatPrice(product.mrp)}
+    </p>
+  )}
+</div>
 
-          {cartControl}
+          
         </div>
       </div>
       )}

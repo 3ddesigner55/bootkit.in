@@ -1,55 +1,41 @@
 "use client";
 
 import { useState } from "react";
-
-import { useAdminProducts } from "@/hooks/useAdminProducts";
-
 import ProductCard from "@/components/product/ProductCard";
 import CategoryEmpty from "./CategoryEmpty";
-
 import ProductBottomSheet from "@/components/product/ProductBottomSheet";
-
 import type { Product } from "@/types/product";
 
 interface CategoryProductGridProps {
-  categorySlug: string;
+  products: Product[];
+  loading?: boolean;
 }
 
 export default function CategoryProductGrid({
-  categorySlug,
+  products = [],
+  loading = false,
 }: CategoryProductGridProps) {
-  const {
-    activeProducts,
-    hydrated,
-  } = useAdminProducts();
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productOpen, setProductOpen] = useState(false);
 
-  const [selectedProduct, setSelectedProduct] =
-    useState<Product | null>(null);
-
-  const [productOpen, setProductOpen] =
-    useState(false);
-
-  if (!hydrated) {
-    return null;
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#F5F7F5]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+      </div>
+    );
   }
-
-  const products = activeProducts.filter(
-    (product) =>
-      product.categorySlug === categorySlug
-  );
 
   if (products.length === 0) {
     return <CategoryEmpty />;
   }
 
+
   return (
     <>
       <div className="h-full overflow-y-auto scrollbar-hide bg-[#F5F7F5] p-4">
-
         <div className="grid grid-cols-2 gap-4">
-
           {products.map((product) => (
-
             <ProductCard
               key={product.id}
               product={product}
@@ -59,11 +45,8 @@ export default function CategoryProductGrid({
                 setProductOpen(true);
               }}
             />
-
           ))}
-
         </div>
-
       </div>
 
       <ProductBottomSheet

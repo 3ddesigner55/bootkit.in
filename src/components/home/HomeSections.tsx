@@ -1,8 +1,9 @@
 "use client";
 
 import CategorySection from "./CategorySection";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { getCategories } from "@/services/category.service";
+import { getProducts } from "@/services/product.service";
+import { useEffect, useState } from "react";
 
 interface HomeSectionsProps {
   onOpen?: (title: string) => void;
@@ -11,17 +12,26 @@ interface HomeSectionsProps {
 export default function HomeSections({
   onOpen,
 }: HomeSectionsProps) {
-  const {
-    activeCategories,
-    hydrated: categoriesReady,
-  } = useAdminCategories();
+  const [activeCategories, setActiveCategories] = useState<any[]>([]);
+  const [activeProducts, setActiveProducts] = useState<any[]>([]);
+  const [ready, setReady] = useState(false);
 
-  const {
-    activeProducts,
-    hydrated: productsReady,
-  } = useAdminProducts();
+  useEffect(() => {
+    Promise.all([
+      getCategories(),
+      getProducts({ limit: 100 }).then((res) => res.items)
+    ])
+      .then(([cats, prods]) => {
+        setActiveCategories(cats);
+        setActiveProducts(prods);
+        setReady(true);
+      })
+      .catch(() => {
+        setReady(true);
+      });
+  }, []);
 
-  if (!categoriesReady || !productsReady) {
+  if (!ready) {
     return null;
   }
 

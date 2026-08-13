@@ -16,24 +16,45 @@ import {
   PackageCheck,
   Settings,
   ShoppingBag,
+  Sparkles,
   Store,
   Tags,
   Users,
   X,
+  Upload,
+  Truck,
+  RotateCcw,
+  DollarSign,
+  LifeBuoy,
+  History,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
+import { useAccount } from "@/hooks/useAccount";
 
 const navigationItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { label: "Home Merchandising", href: "/admin/home-builder", icon: Sparkles },
   { label: "Products", href: "/admin/products", icon: Boxes },
   { label: "Categories", href: "/admin/categories", icon: Grid2X2 },
   { label: "Brands", href: "/admin/brands", icon: Tags },
   { label: "Media Library", href: "/admin/media", icon: Image },
   { label: "Hero Banners", href: "/admin/banners", icon: FileImage },
-  { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Customers", href: "/admin/customers", icon: Users },
+  { label: "Staff & Users", href: "/admin/users", icon: Users },
   { label: "Stores", href: "/admin/stores", icon: Store },
-  { label: "Orders", href: "/admin/orders", icon: ShoppingBag },
+  { label: "Riders", href: "/admin/riders", icon: Truck },
+  { label: "Marketing & Promotions", href: "/admin/marketing", icon: Sparkles },
+  { label: "Orders Overview", href: "/admin/orders", icon: ShoppingBag },
+  { label: "Live Packing", href: "/admin/orders/live", icon: PackageCheck },
+  { label: "In-Transit Dispatch", href: "/admin/orders/in-transit", icon: Truck },
+  { label: "Order History", href: "/admin/orders/history", icon: History },
+  { label: "Support Tickets", href: "/admin/support/tickets", icon: LifeBuoy },
+  { label: "Returns", href: "/admin/returns", icon: RotateCcw },
+  { label: "Refunds", href: "/admin/refunds", icon: DollarSign },
+
   { label: "Inventory", href: "/admin/inventory", icon: PackageCheck },
+  { label: "Import Center", href: "/admin/catalog/import", icon: Upload },
   { label: "Delivery Areas", href: "/admin/delivery-areas", icon: MapPin },
   { label: "Reports", href: "/admin/reports", icon: BarChart3 },
   { label: "Settings", href: "/admin/settings", icon: Settings },
@@ -54,12 +75,18 @@ function SidebarContent({
   compact?: boolean;
   onNavigate?: () => void;
 }) {
+  const { logout } = useAccount();
+
   return (
     <>
       <div className={`flex h-16 items-center border-b border-white/10 px-4 ${compact ? "justify-center" : "gap-3"}`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black text-[var(--primary)]">
+        <Link
+          href="/admin/products/new"
+          title="Add Product"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black text-[var(--primary)] transition hover:scale-105 active:scale-95"
+        >
           B
-        </span>
+        </Link>
         {!compact && (
           <div className="min-w-0">
             <p className="truncate text-sm font-black text-white">BootKit</p>
@@ -98,12 +125,24 @@ function SidebarContent({
         </div>
       </nav>
 
-      {!compact && (
-        <div className="border-t border-white/10 p-4">
-          <p className="text-[10px] font-bold text-white/55">BootKit Admin</p>
-          <p className="mt-0.5 text-[9px] text-white/40">Production workspace</p>
-        </div>
-      )}
+      <div className="border-t border-white/10 p-3">
+        <button
+          onClick={() => logout()}
+          title={compact ? "Logout" : undefined}
+          className={`group flex h-10 w-full items-center rounded-xl text-xs font-bold transition text-white/70 hover:bg-white/10 hover:text-white ${
+            compact ? "justify-center px-2" : "gap-3 px-3"
+          }`}
+        >
+          <LogOut size={17} className="shrink-0" />
+          {!compact && <span>Logout</span>}
+        </button>
+        {!compact && (
+          <div className="mt-3 px-3">
+            <p className="text-[10px] font-bold text-white/55">BootKit Admin</p>
+            <p className="mt-0.5 text-[9px] text-white/40">Production workspace</p>
+          </div>
+        )}
+      </div>
     </>
   );
 }

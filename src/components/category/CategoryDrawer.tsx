@@ -5,9 +5,10 @@ import QuantitySelector from "@/components/ui/QuantitySelector";
 import { useCart } from "@/hooks/useCart";
 import Image from "next/image";
 import { X } from "lucide-react";
-import { useState } from "react";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
+import { useState, useEffect } from "react";
+import { getCategories } from "@/services/category.service";
+import { getCustomerCategoryProducts } from "@/services/customerApi.service";
+import { useLocation } from "@/hooks/useLocation";
 import { formatPrice } from "@/lib/utils";
 
 interface CategoryDrawerProps {
@@ -23,33 +24,58 @@ export default function CategoryDrawer({
   title = "Categories",
   initialCategorySlug,
 }: CategoryDrawerProps) {
+  const { resolvedStoreId } = useLocation();
+  const {
+    hydrated: cartHydrated,
+    getQuantity,
+    addItem,
+    increaseItem,
+    decreaseItem,
+  } = useCart();
 
-const {
-  hydrated,
-  getQuantity,
-  addItem,
-  increaseItem,
-  decreaseItem,
-} = useCart();
+  const [activeCategories, setActiveCategories] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [products, setProducts] = useState<any[]>([]);
+  const [productOpen, setProductOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(false);
 
-const { activeProducts } = useAdminProducts();
-const { activeCategories } = useAdminCategories();
+  useEffect(() => {
+    if (!open) return;
+    void getCategories().then((cats) => {
+      setActiveCategories(cats);
+      if (cats.length > 0 && !selectedCategory) {
+        setSelectedCategory(initialCategorySlug || cats[0].slug);
+      }
+    });
+  }, [open, initialCategorySlug]);
 
-const [selectedCategory, setSelectedCategory] = useState("");
-const [productOpen, setProductOpen] = useState(false);
-const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const currentCategory = selectedCategory || initialCategorySlug || "";
 
-const currentCategory =
-  selectedCategory ||
-  initialCategorySlug ||
-  activeCategories[0]?.slug ||
-  "";
+  useEffect(() => {
+    if (!currentCategory) return;
+    let cancelled = false;
+    setLoading(true);
+    void getCustomerCategoryProducts(currentCategory, { storeId: resolvedStoreId || undefined })
+      .then((res) => {
+        if (!cancelled) {
+          setProducts(res.products || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching drawer products:", err);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
 
-const products = activeProducts.filter(
-  (product) => product.categorySlug === currentCategory
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCategory, resolvedStoreId]);
 
-  
-);
 
 
 
@@ -186,7 +212,7 @@ const products = activeProducts.filter(
       {product.unit.label}
     </p>
 
-    {hydrated && getQuantity(product.id) === 0 ? (
+    {cartHydrated && getQuantity(product.id) === 0 ? (
 
   <button
     onClick={() => addItem(product)}

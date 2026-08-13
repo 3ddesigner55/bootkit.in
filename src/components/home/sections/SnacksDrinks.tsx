@@ -1,55 +1,68 @@
 "use client";
 
 import SectionBlock from "./SectionBlock";
+import {
+  getHomeCategorySection,
+  type HomeCategoryItem,
+} from "@/services/home.service";
+import { useEffect, useState } from "react";
 
-const snackItems = [
-  {
-    name: "Cold Drinks",
-    slug: "cold-drinks",
-    image: "/images/categories/cold-drinks.png",
-  },
-  {
-    name: "Tea & Coffee",
-    slug: "tea-coffee",
-    image: "/images/categories/tea-coffee.png",
-  },
-  {
-    name: "Juices",
-    slug: "juices",
-    image: "/images/categories/juices.png",
-  },
-  {
-    name: "Energy Drinks",
-    slug: "energy-drinks",
-    image: "/images/categories/energy-drinks.png",
-  },
-  {
-    name: "Chips & Namkeen",
-    slug: "chips-namkeen",
-    image: "/images/categories/chips.png",
-  },
-  {
-    name: "Biscuits",
-    slug: "biscuits",
-    image: "/images/categories/biscuits.png",
-  },
-  {
-    name: "Chocolates",
-    slug: "chocolates",
-    image: "/images/categories/chocolates.png",
-  },
-  {
-    name: "Ice Cream",
-    slug: "ice-cream",
-    image: "/images/categories/ice-cream.png",
-  },
-];
+interface SnacksDrinksProps {
+  items?: HomeCategoryItem[];
+  title?: string;
+  viewAllUrl?: string;
+}
 
-export default function SnacksDrinks() {
+export default function SnacksDrinks({
+  items: initialItems,
+  title = "Snacks & Drinks",
+  viewAllUrl,
+}: SnacksDrinksProps = {}) {
+  const isDynamicMode = initialItems !== undefined;
+  const [snackItems, setSnackItems] = useState<HomeCategoryItem[]>(initialItems || []);
+  const [hydrated, setHydrated] = useState(isDynamicMode);
+
+  useEffect(() => {
+    if (isDynamicMode) {
+      setSnackItems(initialItems || []);
+      setHydrated(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void getHomeCategorySection("snacksDrinks")
+      .then((items) => {
+        if (!cancelled) {
+          setSnackItems(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSnackItems([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHydrated(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialItems, isDynamicMode]);
+
+  if (!hydrated || snackItems.length === 0) {
+    return null;
+  }
+
   return (
     <SectionBlock
-      title="Snacks & Drinks"
+      title={title}
       items={snackItems}
+      viewAllUrl={viewAllUrl}
     />
   );
 }
+

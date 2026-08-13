@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { getProduct } from "@/services/product.service";
 import { useCart } from "@/hooks/useCart";
 import { useWishlist } from "@/hooks/useWishlist";
+import { useLocation } from "@/hooks/useLocation";
 import { formatPrice, percentageOff } from "@/lib/utils";
 import type { ProductVariant } from "@/types/product";
 import QuantitySelector from "@/components/ui/QuantitySelector";
@@ -29,32 +30,48 @@ export default function ProductDetails() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
   const slug = decodeURIComponent(params.slug);
-  const { activeProducts, hydrated: productsHydrated, getProductBySlug } =
-    useAdminProducts();
+  const { resolvedStoreId } = useLocation();
+
+  const [product, setProduct] = useState<any | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const { hydrated: cartHydrated, getQuantity, addItem, increaseItem, decreaseItem } =
     useCart();
   const { hydrated: wishlistHydrated, isWishlisted, toggleWishlist } = useWishlist();
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant>();
 
-  const product = getProductBySlug(slug);
-  const relatedProducts = useMemo(() => {
-    if (!product) {
-      return [];
-    }
+  useEffect(() => {
+    if (!slug) return;
+    let cancelled = false;
+    setLoading(true);
 
-    return activeProducts
-      .filter(
-        (item) =>
-          item.id !== product.id && item.categorySlug === product.categorySlug
-      )
-      .slice(0, 8);
-  }, [activeProducts, product]);
+    void getProduct(slug, resolvedStoreId || undefined)
+      .then((res) => {
+        if (!cancelled) {
+          setProduct(res.product);
+          setRelatedProducts(res.relatedProducts || []);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching product details:", err);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, resolvedStoreId]);
 
   useEffect(() => {
     setSelectedVariant(undefined);
   }, [product?.id]);
 
-  if (!productsHydrated) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-white">
         <div className="h-16 animate-pulse border-b border-[#EEF2EF] bg-white" />
@@ -69,6 +86,7 @@ export default function ProductDetails() {
       </div>
     );
   }
+
 
   if (!product) {
     return (
@@ -183,7 +201,7 @@ export default function ProductDetails() {
         <div className="space-y-5 px-4 pb-6">
           {hasTags ? (
             <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-              {product.tags?.map((tag) => (
+              {product.tags?.map((tag: string) => (
                 <span
                   key={tag}
                   className="shrink-0 rounded-full bg-[#EFF8F1] px-3 py-1.5 text-[11px] font-black text-[var(--primary)]"

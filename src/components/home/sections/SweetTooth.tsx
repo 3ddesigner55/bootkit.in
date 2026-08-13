@@ -1,90 +1,85 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-export default function SweetTooth() {
+import ProductCard from "@/components/product/ProductCard";
+import { getHome } from "@/services/home.service";
+import type { Product } from "@/types/product";
+
+interface SweetToothProps {
+  products?: Product[];
+  title?: string;
+}
+
+export default function SweetTooth({
+  products: initialProducts,
+  title = "Sweet Tooth",
+}: SweetToothProps = {}) {
+  const isDynamicMode = initialProducts !== undefined;
+  const [products, setProducts] = useState<Product[]>(initialProducts || []);
+  const [loading, setLoading] = useState(!isDynamicMode);
+
+  useEffect(() => {
+    if (isDynamicMode) {
+      setProducts(initialProducts || []);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    getHome()
+      .then((data) => {
+        if (!cancelled && data.sweetTooth) {
+          setProducts(data.sweetTooth as unknown as Product[]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProducts([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialProducts, isDynamicMode]);
+
+  if (loading || products.length === 0) {
+    return null;
+  }
+
+  const categorySlug = products[0]?.categorySlug || (products[0] as any)?.category?.slug || "sweet-tooth";
+
   return (
-    <section className="mt-8">
-      {/* Header */}
+    <section className="px-4 py-4">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-900">
-          Sweet Tooth
-        </h2>
+        <h2 className="text-lg font-bold">{title}</h2>
 
-        <Link
-          href="/category/sweet-tooth"
+        
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {products.slice(0, 6).map((product) => (
+          <ProductCard
+  key={product.id}
+  product={product}
+  variant="bestSellerPopup"
+/>
+        ))}
+      </div>
+      <Link
+          href={`/category/${categorySlug}`}
           className="text-sm font-semibold text-green-600"
         >
           See All
         </Link>
-      </div>
-
-      {/* Products */}
-{/* Products */}
-<div className="grid grid-cols-3 gap-2">
-  {[1, 2, 3, 4, 5, 6].map((item) => (
-    <Link
-  key={item}
-  href="/product/sprite-750ml"
-  className="block rounded-xl border border-gray-200 bg-white p-2 shadow-sm transition hover:shadow-md"
->
-      {/* Image */}
-      <div className="relative">
-        <button className="absolute right-2 top-2 z-10 rounded-full bg-white p-1 shadow">
-          🤍
-        </button>
-
-        <div className="h-24 overflow-hidden rounded-lg bg-gray-50">
-          <img
-            src="/images/products/sprite.png"
-            alt="Sprite"
-            className="mx-auto h-20 w-20 object-contain"
-          />
-        </div>
-
-        <div className="mt-2 flex justify-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-300"></span>
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-300"></span>
-        </div>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-[10px] text-gray-500">750 ml</span>
-
-        <button className="rounded-md border border-green-600 px-2 py-1 text-[11px] font-bold text-green-600">
-          ADD
-        </button>
-      </div>
-
-      <p className="mt-2 text-base font-bold">₹38</p>
-
-      <p className="text-xs font-medium text-green-600">
-        5% OFF
-      </p>
-
-      <h3 className="mt-2 line-clamp-2 text-xs font-medium">
-        Sprite Limca Flavored Soft Drink
-      </h3>
-
-      <div className="mt-2 flex justify-between text-[10px] text-gray-500">
-        <span>⭐ 4.8</span>
-        <span>⚡ 8 min</span>
-      </div>
-    </Link>
-    
-  ))}
-</div>
-
-      {/* Bottom Button */}
-      <div className="mt-5 text-center">
-        <Link
-          href="/category/sweet-tooth"
-          className="inline-flex rounded-lg border border-green-600 px-5 py-2 text-sm font-semibold text-green-600 hover:bg-green-50"
-        >
-          See All Products
-        </Link>
-      </div>
     </section>
   );
 }

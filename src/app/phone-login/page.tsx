@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import Container from "@/components/ui/Container";
-import Header from "@/components/layout/Header";
-import { supabase } from "@/lib/supabase/client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function PhoneLoginPage() {
-  const [phone, setPhone] = useState(""); const [otp, setOtp] = useState(""); const [sent, setSent] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState("");
-  const sendOtp = async (event: FormEvent) => { event.preventDefault(); setError(""); const digits = phone.replace(/\D/g, ""); if (digits.length !== 10) return setError("10-digit mobile number डालें।"); if (!supabase) return setError("Supabase connection configured नहीं है।"); const { error } = await supabase.auth.signInWithOtp({ phone: `+91${digits}` }); if (error) return setError(error.message); setSent(true); setMessage("OTP आपके mobile number पर भेज दिया गया है।"); };
-  const verifyOtp = async (event: FormEvent) => { event.preventDefault(); setError(""); if (!supabase) return setError("Supabase connection configured नहीं है।"); const { error } = await supabase.auth.verifyOtp({ phone: `+91${phone.replace(/\D/g, "")}`, token: otp, type: "sms" }); if (error) return setError(error.message); window.location.assign("/account"); };
-  return <div className="min-h-screen bg-[var(--background)]"><Header /><Container className="py-10"><form onSubmit={sent ? verifyOtp : sendOtp} className="mx-auto max-w-md rounded-3xl border border-[var(--border)] bg-white p-6 shadow-[var(--shadow-sm)]"><h1 className="text-2xl font-black">Mobile login</h1><p className="mt-1 text-sm text-[var(--text-muted)]">अपने verified Indian mobile number पर OTP लें।</p>{!sent ? <label className="mt-6 block text-xs font-bold">Mobile number<div className="mt-1 flex h-11 overflow-hidden rounded-xl border border-[var(--border)]"><span className="flex items-center border-r border-[var(--border)] bg-[var(--surface-soft)] px-3 text-sm font-bold">+91</span><input type="tel" inputMode="numeric" required value={phone} onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit number" className="min-w-0 flex-1 px-3 text-sm outline-none" /></div></label> : <label className="mt-6 block text-xs font-bold">6-digit OTP<input type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-1 h-11 w-full rounded-xl border border-[var(--border)] px-3 text-sm" /></label>}{message && <p className="mt-3 text-xs font-bold text-[var(--success)]">{message}</p>}{error && <p className="mt-3 text-xs font-bold text-[var(--danger)]">{error}</p>}<button className="mt-6 h-12 w-full rounded-xl bg-[var(--primary)] text-sm font-black text-white">{sent ? "Verify OTP" : "Send OTP"}</button><p className="mt-4 text-center text-xs"><Link href="/login" className="font-black text-[var(--primary)]">Login with email instead</Link></p></form></Container></div>;
+export default function CustomerAuthRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/");
+  }, [router]);
+
+  return null;
 }

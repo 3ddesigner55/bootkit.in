@@ -14,16 +14,15 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useCallback,
   useMemo,
   useState,
 } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
-import {
-  getStoredOrders,
-  updateStoredOrder,
-} from "@/lib/orders";
 import { formatPrice } from "@/lib/utils";
+import { useAccount } from "@/hooks/useAccount";
+import { getAdminOrders, updateAdminOrderStatus } from "@/services/adminOrders.service";
 import type { BootkitOrder } from "@/types/order";
 import AdminEmptyState from "@/components/admin/ui/AdminEmptyState";
 import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
@@ -43,49 +42,27 @@ const statusOptions: OrderStatus[] = [
 ];
 
 export default function AdminOrdersClient() {
+  const { hydrated: accountHydrated, session } = useAccount();
+  const accessToken = session?.accessToken;
   const [orders, setOrders] = useState<BootkitOrder[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] =
     useState<"All" | OrderStatus>("All");
   const [updatingOrder, setUpdatingOrder] = useState("");
+  const [page] = useState(1);
 
-  const loadOrders = () => {
-    setOrders(getStoredOrders());
-    setHydrated(true);
-  };
+  const loadOrders = useCallback(async () => {
+    if (!accessToken) { setOrders([]); setHydrated(true); return; }
+    try { const result = await getAdminOrders(accessToken, { page, search: query, status: statusFilter === "All" ? undefined : statusFilter.replaceAll(" ", "_").toUpperCase() }); setOrders(result.orders); } finally { setHydrated(true); }
+  }, [accessToken, page, query, statusFilter]);
 
   useEffect(() => {
-    loadOrders();
-  }, []);
+    if (!accountHydrated) return;
+    void loadOrders();
+  }, [accountHydrated, loadOrders]);
 
-  const filteredOrders = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return orders.filter((order) => {
-      const matchesStatus =
-        statusFilter === "All" ||
-        order.status === statusFilter;
-
-      const matchesQuery =
-        !normalizedQuery ||
-        [
-          order.orderNumber,
-          order.address.fullName,
-          order.address.phone,
-          order.address.pincode,
-          order.address.city,
-          order.paymentMethod,
-          order.status,
-        ].some((value) =>
-          String(value)
-            .toLowerCase()
-            .includes(normalizedQuery)
-        );
-
-      return matchesStatus && matchesQuery;
-    });
-  }, [orders, query, statusFilter]);
+  const filteredOrders = orders;
 
   const totalRevenue = orders
     .filter((order) => order.status !== "Cancelled")
@@ -104,39 +81,14 @@ export default function AdminOrdersClient() {
     (order) => order.status === "Delivered"
   ).length;
 
-  const changeOrderStatus = (
+  const changeOrderStatus = async (
     orderNumber: string,
     status: OrderStatus
   ) => {
     setUpdatingOrder(orderNumber);
 
-    const updatedOrder = updateStoredOrder(
-      orderNumber,
-      (order) => ({
-        ...order,
-        status,
-        paymentStatus:
-          status === "Delivered" &&
-          order.paymentMethod === "COD"
-            ? "Paid"
-            : order.paymentStatus,
-        updatedAt: new Date().toISOString(),
-      })
-    );
-
-    if (updatedOrder) {
-      setOrders((current) =>
-        current.map((order) =>
-          order.orderNumber === orderNumber
-            ? updatedOrder
-            : order
-        )
-      );
-    }
-
-    window.setTimeout(() => {
-      setUpdatingOrder("");
-    }, 300);
+    if (!accessToken) return;
+    try { const updatedOrder = await updateAdminOrderStatus(accessToken, orderNumber, status); setOrders((current) => current.map((order) => order.orderNumber === orderNumber ? updatedOrder : order)); } finally { setUpdatingOrder(""); }
   };
 
   return (

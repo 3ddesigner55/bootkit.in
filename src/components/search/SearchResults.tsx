@@ -12,13 +12,15 @@ import {
 import {
   useMemo,
   useState,
+  useEffect,
   type FormEvent,
 } from "react";
 import Header from "@/components/layout/Header";
 import ProductCard from "@/components/product/ProductCard";
+import { getCategories } from "@/services/category.service";
+import { getProducts } from "@/services/product.service";
 import Container from "@/components/ui/Container";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
+
 
 type SortOption =
   | "relevance"
@@ -68,13 +70,29 @@ export default function SearchResults() {
   const [minimumRating, setMinimumRating] = useState("0");
   const [inStockOnly, setInStockOnly] = useState(false);
 
-  const {
-  activeProducts: products,
-  hydrated,
-} = useAdminProducts();
-  const {
-  activeCategories: categories,
-} = useAdminCategories();
+  const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getProducts({ limit: 100 }).then((res) => res.items),
+      getCategories()
+    ]).then(([pList, cList]) => {
+      if (!cancelled) {
+        setProducts(pList);
+        setCategories(cList);
+        setHydrated(true);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setHydrated(true);
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, []);
 
   const normalizedQuery = currentQuery.toLowerCase();
   const brands = useMemo(

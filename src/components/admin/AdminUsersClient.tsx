@@ -14,7 +14,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Container from "@/components/ui/Container";
 import Header from "@/components/layout/Header";
 import { formatPrice } from "@/lib/utils";
@@ -25,9 +25,18 @@ import AdminPagination from "@/components/admin/ui/AdminPagination";
 import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
 import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
 import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
+import { useAccount } from "@/hooks/useAccount";
+import {
+  getAdminCustomer,
+  getAdminCustomerAddresses,
+  getAdminCustomerOrders,
+  getAdminCustomers,
+  updateAdminCustomerStatus,
+  type AdminCustomer,
+} from "@/services/adminCustomers.service";
 
 type UserStatus = "Active" | "Blocked";
-type UserRole = "Customer" | "Seller" | "Delivery Partner";
+type UserRole = "Customer";
 type UserFilter = "All" | "Active" | "Blocked" | "New Users";
 
 type AdminUser = {
@@ -41,16 +50,8 @@ type AdminUser = {
   status: UserStatus;
   role: UserRole;
   address: string;
+  latestOrderDate: string | null;
 };
-
-const initialUsers: AdminUser[] = [
-  { id: "usr_001", fullName: "Aarav Sharma", email: "aarav@example.com", phone: "9876543210", registeredAt: "2026-08-04", totalOrders: 12, totalSpend: 4280, status: "Active", role: "Customer", address: "Ward 12, Sardarshahar, Rajasthan 331403" },
-  { id: "usr_002", fullName: "Kavya Mehta", email: "kavya@example.com", phone: "9876543211", registeredAt: "2026-07-28", totalOrders: 8, totalSpend: 2960, status: "Active", role: "Customer", address: "Main Market, Sardarshahar, Rajasthan 331403" },
-  { id: "usr_003", fullName: "Rohan Verma", email: "rohan@example.com", phone: "9876543212", registeredAt: "2026-07-09", totalOrders: 3, totalSpend: 890, status: "Blocked", role: "Customer", address: "Station Road, Sardarshahar, Rajasthan 331403" },
-  { id: "usr_004", fullName: "Neha Foods", email: "nehafoods@example.com", phone: "9876543213", registeredAt: "2026-08-03", totalOrders: 0, totalSpend: 0, status: "Active", role: "Seller", address: "Churu Road, Sardarshahar, Rajasthan 331403" },
-  { id: "usr_005", fullName: "Imran Khan", email: "imran@example.com", phone: "9876543214", registeredAt: "2026-07-18", totalOrders: 24, totalSpend: 8940, status: "Active", role: "Customer", address: "Nai Sadak, Sardarshahar, Rajasthan 331403" },
-  { id: "usr_006", fullName: "Pooja Rathore", email: "pooja@example.com", phone: "9876543215", registeredAt: "2026-08-01", totalOrders: 0, totalSpend: 0, status: "Active", role: "Delivery Partner", address: "Bidasar Road, Sardarshahar, Rajasthan 331403" },
-];
 
 const filters: UserFilter[] = [
   "All",
@@ -61,77 +62,125 @@ const filters: UserFilter[] = [
 
 const pageSize = 4;
 
+function toAdminUser(customer: AdminCustomer): AdminUser {
+  return {
+    id: customer.id,
+    fullName: customer.fullName,
+    email: customer.email,
+    phone: customer.phone,
+    registeredAt: customer.registeredAt,
+    totalOrders: customer.orderCount,
+    totalSpend: customer.totalSpend,
+    status: customer.status,
+    role: "Customer",
+    address: "",
+    latestOrderDate: customer.latestOrderDate,
+  };
+}
+
+function formatAddress(addresses: Awaited<ReturnType<typeof getAdminCustomerAddresses>>) {
+  const address = addresses[0];
+
+  if (!address) return "No saved address";
+
+  return [
+    address.addressLine1,
+    address.addressLine2,
+    address.landmark,
+    address.city,
+    address.state,
+    address.postalCode,
+  ].filter(Boolean).join(", ");
+}
+
 export default function AdminUsersClient() {
-  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
+  const { hydrated: accountHydrated, session } = useAccount();
+  const accessToken = session?.accessToken;
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<UserFilter>("All");
   const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [message, setMessage] = useState("");
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const filteredUsers = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const newUserCutoff = new Date("2026-07-30");
+  const loadUsers = useCallback(async () => {
+    if (!accessToken) {
+      setUsers([]);
+      setTotalPages(1);
+      setIsLoading(false);
+      return;
+    }
 
-    return users.filter((user) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        [user.fullName, user.email, user.phone].some((value) =>
-          value.toLowerCase().includes(normalizedQuery)
-        );
-      const matchesFilter =
-        filter === "All" ||
-        (filter === "Active" && user.status === "Active") ||
-        (filter === "Blocked" && user.status === "Blocked") ||
-        (filter === "New Users" &&
-          new Date(user.registeredAt) >= newUserCutoff);
+    setIsLoading(true);
+    try {
+      const result = await getAdminCustomers(accessToken, {
+        page,
+        limit: pageSize,
+        search: query,
+        status: filter === "Active" || filter === "Blocked" ? filter : undefined,
+      });
+      setUsers(result.customers.map(toAdminUser));
+      setTotalPages(Math.max(1, result.pagination.totalPages));
+    } catch (error) {
+      setUsers([]);
+      setTotalPages(1);
+      setMessage(error instanceof Error ? error.message : "Customers could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [accessToken, filter, page, query]);
 
-      return matchesQuery && matchesFilter;
-    });
-  }, [filter, query, users]);
+  useEffect(() => {
+    if (!accountHydrated) return;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredUsers.length / pageSize)
-  );
-  const visibleUsers = filteredUsers.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
+    void loadUsers();
+  }, [accountHydrated, loadUsers]);
 
   const changeFilter = (nextFilter: UserFilter) => {
     setFilter(nextFilter);
     setPage(1);
   };
 
-  const toggleUserStatus = (user: AdminUser) => {
+  const toggleUserStatus = async (user: AdminUser) => {
     const nextStatus: UserStatus =
       user.status === "Active" ? "Blocked" : "Active";
 
-    setUsers((current) =>
-      current.map((item) =>
-        item.id === user.id
-          ? { ...item, status: nextStatus }
-          : item
-      )
-    );
-    setSelectedUser((current) =>
-      current?.id === user.id
-        ? { ...current, status: nextStatus }
-        : current
-    );
-    setMessage(`${user.fullName} is ${nextStatus.toLowerCase()} in this preview session.`);
+    if (!accessToken) return;
+
+    try {
+      await updateAdminCustomerStatus(accessToken, user.id, nextStatus);
+      setUsers((current) => current.map((item) => item.id === user.id ? { ...item, status: nextStatus } : item));
+      setSelectedUser((current) => current?.id === user.id ? { ...current, status: nextStatus } : current);
+      setMessage(`${user.fullName} is ${nextStatus.toLowerCase()}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Customer status could not be updated.");
+    }
   };
 
-  const deleteUser = (user: AdminUser) => {
-    setUsers((current) =>
-      current.filter((item) => item.id !== user.id)
-    );
-    setSelectedUser((current) =>
-      current?.id === user.id ? null : current
-    );
-    setMessage(`${user.fullName} was removed in this preview session.`);
+  const viewUser = async (user: AdminUser) => {
+    setSelectedUser(user);
+
+    if (!accessToken) return;
+
+    try {
+      const [customer, addresses, orders] = await Promise.all([
+        getAdminCustomer(accessToken, user.id),
+        getAdminCustomerAddresses(accessToken, user.id),
+        getAdminCustomerOrders(accessToken, user.id),
+      ]);
+      const nextUser = {
+        ...toAdminUser(customer),
+        address: formatAddress(addresses),
+        totalOrders: orders.summary.totalOrders,
+        totalSpend: orders.summary.totalSpend,
+        latestOrderDate: orders.summary.latestOrderDate,
+      };
+      setSelectedUser((current) => current?.id === user.id ? nextUser : current);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Customer details could not be loaded.");
+    }
   };
 
   if (isLoading) {
@@ -203,7 +252,7 @@ export default function AdminUsersClient() {
             </div>
           </section>
 
-          {visibleUsers.length === 0 ? (
+          {users.length === 0 ? (
             <AdminEmptyState
               title="No matching users"
               description="Try another search or account status filter."
@@ -212,26 +261,26 @@ export default function AdminUsersClient() {
             />
           ) : (
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {visibleUsers.map((user) => (
+              {users.map((user) => (
                 <UserCard
                   key={user.id}
                   user={user}
-                  onView={() => setSelectedUser(user)}
+                  onView={() => void viewUser(user)}
                   onEdit={() =>
                     setMessage("User editing will be connected to the approved backend.")
                   }
-                  onToggleStatus={() => toggleUserStatus(user)}
-                  onDelete={() => deleteUser(user)}
+                  onToggleStatus={() => void toggleUserStatus(user)}
+                  onDelete={() => setMessage("Customer deletion is not supported by the current backend.")}
                 />
               ))}
             </div>
           )}
 
-          {filteredUsers.length > 0 && (
+          {users.length > 0 && (
             <AdminPagination
               page={page}
               totalPages={totalPages}
-              onPrevious={() => setPage((current) => current - 1)}
+              onPrevious={() => setPage((current) => Math.max(1, current - 1))}
               onNext={() => setPage((current) => current + 1)}
               className="mt-6"
             />
@@ -243,8 +292,8 @@ export default function AdminUsersClient() {
         <UserDetailDrawer
           user={selectedUser}
           onClose={() => setSelectedUser(null)}
-          onToggleStatus={() => toggleUserStatus(selectedUser)}
-          onDelete={() => deleteUser(selectedUser)}
+          onToggleStatus={() => void toggleUserStatus(selectedUser)}
+          onDelete={() => setMessage("Customer deletion is not supported by the current backend.")}
         />
       )}
     </div>

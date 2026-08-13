@@ -1,5 +1,5 @@
 "use client";
-
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -17,6 +17,7 @@ import type {
 
 export const LocationContext =
   createContext<LocationContextValue | null>(null);
+
 
 const STORAGE_KEY = "bootkit_location_v1";
 const DEVICE_LOCATION_KEY = "bootkit_device_location_v1";
@@ -54,8 +55,11 @@ export default function LocationProvider({
 }: {
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+
   const [location, setLocation] =
     useState<SelectedLocation | null>(null);
+  
 
   const [hydrated, setHydrated] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -65,9 +69,29 @@ export default function LocationProvider({
     setHydrated(true);
   }, []);
 
-  useEffect(() => {
-    if (hydrated && !location) setModalOpen(true);
-  }, [hydrated, location]);
+useEffect(() => {
+  if (!hydrated) {
+    return;
+  }
+
+  const dedicatedLocationFlow = [
+  "/login",
+  "/phone-login",
+  "/otp-verification",
+  "/select-location",
+  "/confirm-location",
+  "/unserviceable-area",
+].includes(pathname);
+
+  if (dedicatedLocationFlow) {
+    setModalOpen(false);
+    return;
+  }
+
+  if (!location) {
+    setModalOpen(true);
+  }
+}, [hydrated, location, pathname]);
 
   const openLocationModal = useCallback(() => {
     setModalOpen(true);
@@ -119,9 +143,22 @@ export default function LocationProvider({
     }
   }, []);
 
+  const [resolvedStoreId, setResolvedStoreIdState] = useState<string | null>(null);
+
+  const setResolvedStoreId = useCallback((storeId: string | null) => {
+    setResolvedStoreIdState(storeId);
+    if (storeId) {
+      try {
+        window.localStorage.setItem("bootkit_resolved_store_id", storeId);
+      } catch {}
+    }
+  }, []);
+
   const value = useMemo<LocationContextValue>(
     () => ({
       location,
+      resolvedStoreId,
+      setResolvedStoreId,
       hydrated,
       modalOpen,
       openLocationModal,
@@ -131,6 +168,8 @@ export default function LocationProvider({
     }),
     [
       location,
+      resolvedStoreId,
+      setResolvedStoreId,
       hydrated,
       modalOpen,
       openLocationModal,
@@ -139,6 +178,7 @@ export default function LocationProvider({
       clearLocation,
     ]
   );
+
 
   return (
     <LocationContext.Provider value={value}>

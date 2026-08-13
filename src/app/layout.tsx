@@ -1,4 +1,4 @@
-
+import "mapbox-gl/dist/mapbox-gl.css";
 import DeliveryAreaAdminProvider from "@/store/DeliveryAreaAdminProvider";
 import CategoryAdminProvider from "@/store/CategoryAdminProvider";
 import ProductAdminProvider from "@/store/ProductAdminProvider";

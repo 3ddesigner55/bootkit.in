@@ -1,1092 +1,1072 @@
 "use client";
 
 import {
-  CheckCircle2,
-  Eye,
-  EyeOff,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import Link from "next/link";
+import {
   Grid2X2,
-  Pencil,
   Plus,
   RefreshCw,
-  Save,
+  Search,
+  Upload,
+  Download,
+  ChevronRight,
+  ChevronDown,
+  FolderTree,
+  Pencil,
   Trash2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Package,
+  Layers,
+  Sparkles,
+  ExternalLink,
+  Image as ImageIcon,
+  Save,
   X,
+  FileSpreadsheet,
 } from "lucide-react";
-import {
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
 import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
-import { ImageUploader } from "@/components/admin/media";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
-import type { Category } from "@/types/category";
-import AdminEmptyState from "@/components/admin/ui/AdminEmptyState";
-import AdminLoadingSkeleton from "@/components/admin/ui/AdminLoadingSkeleton";
-import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
-import AdminPrimaryButton from "@/components/admin/ui/AdminPrimaryButton";
-import AdminSearchBar from "@/components/admin/ui/AdminSearchBar";
-import AdminStatusBadge from "@/components/admin/ui/AdminStatusBadge";
+import { useAccount } from "@/hooks/useAccount";
+import {
+  ImageUploader,
+  type ImageUploaderItem,
+} from "@/components/admin/media";
 
-type CategoryFilter = "All" | "Active" | "Inactive";
-
-type CategoryForm = {
+type CategoryTreeNode = {
+  id: string;
+  _id: string;
   name: string;
   slug: string;
-  description: string;
-
-  icon: string;
-
-  image: string;
-
-  banner: string;
-
-  background: string;
-
-  sortOrder: string;
-
-  featured: boolean;
-
+  icon?: string;
+  image?: string;
+  banner?: string;
+  parentCategory?: string | null;
+  level: number;
+  fullPath: string;
+  productCount: number;
   active: boolean;
-  showOnHome: boolean;
-
-homeLayout: "grid" | "slider";
-
-displayOrder: string;
+  sortOrder: number;
+  children?: CategoryTreeNode[];
 };
 
-const emptyForm: CategoryForm = {
-  name: "",
-  slug: "",
-  description: "",
-
-  icon: "📦",
-
-  image: "",
-
-  banner: "",
-
-  background: "#F2F5EF",
-
-  sortOrder: "1",
-
-  featured: false,
-
-  active: true,
-  showOnHome: true,
-
-homeLayout: "grid",
-
-displayOrder: "1",
+type CategorySummary = {
+  total: number;
+  mainCategories: number;
+  subcategories: number;
+  leafCategories: number;
+  active: number;
+  inactive: number;
 };
 
-function createSlug(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function categoryToForm(
-  category: Category
-): CategoryForm {
-
-  return {
-    name: category.name,
-    slug: category.slug,
-    description: category.description,
-
-    icon: category.icon,
-
-    image: category.image ?? "",
-
-    banner: category.banner ?? "",
-
-    background: category.background,
-
-    sortOrder: String(category.sortOrder),
-
-    featured: category.featured,
-
-    active: category.active,
-    showOnHome: category.showOnHome,
-
-homeLayout: category.homeLayout,
-
-displayOrder: String(category.displayOrder),
-  };
-}
+type CsvPreviewRow = {
+  rowIndex: number;
+  name: string;
+  slug: string;
+  parentSlug: string;
+  description?: string;
+  image?: string;
+  icon?: string;
+  banner?: string;
+  active: boolean;
+  sortOrder: number;
+  errors: string[];
+  status: "VALID" | "ERROR";
+  computedLevel: number;
+  fullPath: string;
+  action: "CREATE" | "UPDATE";
+};
 
 export default function AdminCategoriesClient() {
-  const {
-    categories,
-    hydrated,
-    addCategory,
-    updateCategory,
-    removeCategory,
-    toggleCategoryActive,
-    resetCategories,
-  } = useAdminCategories();
+  const { session, hydrated: accountHydrated } = useAccount();
+  const accessToken = session?.accessToken || "";
 
-  const {
-    products,
-    hydrated: productsHydrated,
-  } = useAdminProducts();
+  // Data State
+  const [tree, setTree] = useState<CategoryTreeNode[]>([]);
+  const [summary, setSummary] = useState<CategorySummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [levelFilter, setLevelFilter] = useState<"ALL" | "L1" | "L2" | "L3">("ALL");
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] =
-    useState<CategoryFilter>("All");
+  // Add / Edit Modal State
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    slug: "",
+    parentCategory: "",
+    description: "",
+    image: "",
+    icon: "",
+    banner: "",
+    active: true,
+    sortOrder: 1,
+  });
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [formError, setFormError] = useState("");
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingCategory, setEditingCategory] =
-    useState<Category | null>(null);
+  // CSV Import Modal State
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [validatingCsv, setValidatingCsv] = useState(false);
+  const [csvPreviewRows, setCsvPreviewRows] = useState<CsvPreviewRow[]>([]);
+  const [importMode, setImportMode] = useState<"CREATE_ONLY" | "UPSERT_BY_SLUG">("CREATE_ONLY");
+  const [executingImport, setExecutingImport] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [importError, setImportError] = useState("");
 
-  const [form, setForm] =
-    useState<CategoryForm>(emptyForm);
-
-  const [slugEdited, setSlugEdited] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const categoryProductCounts = useMemo(() => {
-    return products.reduce<Record<string, number>>(
-      (counts, product) => {
-        counts[product.categorySlug] =
-          (counts[product.categorySlug] ?? 0) + 1;
-
-        return counts;
-      },
-      {}
-    );
-  }, [products]);
-
-  const filteredCategories = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return [...categories]
-      .filter((category) => {
-        const matchesQuery =
-          !normalizedQuery ||
-          [
-            category.name,
-            category.slug,
-            category.description,
-          ].some((value) =>
-            value.toLowerCase().includes(normalizedQuery)
-          );
-
-        const matchesFilter =
-          filter === "All" ||
-          (filter === "Active" && category.active) ||
-          (filter === "Inactive" && !category.active);
-
-        return matchesQuery && matchesFilter;
-      })
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [categories, query, filter]);
-
-  const stats = useMemo(
-    () => ({
-      total: categories.length,
-      active: categories.filter(
-        (category) => category.active
-      ).length,
-      inactive: categories.filter(
-        (category) => !category.active
-      ).length,
-      assignedProducts: products.filter((product) =>
-        categories.some(
-          (category) =>
-            category.slug === product.categorySlug
-        )
-      ).length,
-    }),
-    [categories, products]
-  );
-
-  const openAddForm = () => {
-    const nextSortOrder =
-      categories.length > 0
-        ? Math.max(
-            ...categories.map(
-              (category) => category.sortOrder
-            )
-          ) + 1
-        : 1;
-
-    setEditingCategory(null);
-    setForm({
-      ...emptyForm,
-      sortOrder: String(nextSortOrder),
-    });
-    setSlugEdited(false);
-    setError("");
-    setMessage("");
-    setFormOpen(true);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  const openEditForm = (category: Category) => {
-    setEditingCategory(category);
-    setForm(categoryToForm(category));
-    setSlugEdited(true);
-    setError("");
-    setMessage("");
-    setFormOpen(true);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  const closeForm = () => {
-    setFormOpen(false);
-    setEditingCategory(null);
-    setForm(emptyForm);
-    setSlugEdited(false);
-    setError("");
-  };
-
-  const updateField = (
-    event: ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement
-    >
-  ) => {
-    const { name, value } = event.target;
-
-    let nextValue = value;
-
-    if (
-      name === "sortOrder" ||
-      name === "displayOrder"
-    ) {
-      nextValue = value.replace(/\D/g, "");
+  const updateCategoryImage = async (items: ImageUploaderItem[]) => {
+    const item = items[0];
+    if (!item) {
+      setFormData((current) => ({ ...current, image: "" }));
+      return;
     }
-
-    if (name === "slug") {
-      setSlugEdited(true);
-      nextValue = createSlug(value);
+    if (!item.file) {
+      setFormData((current) => ({ ...current, image: item.url }));
+      return;
     }
+    if (!accessToken) {
+      setFormError("Your admin session has expired. Please sign in again.");
+      return;
+    }
+    try {
+      const formDataObj = new FormData();
+      formDataObj.append("image", item.file);
 
-    setForm((current) => {
-      const updated = {
-        ...current,
-        [name]: nextValue,
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/admin/categories/upload`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: formDataObj,
+      });
+
+      if (!res.ok) throw new Error("Image upload failed");
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "Image upload failed");
+
+      setFormData((current) => ({ ...current, image: data.data.image || "" }));
+      setFormError("");
+    } catch (uploadError) {
+      setFormError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Category image could not be uploaded.",
+      );
+    }
+  };
+
+  const fetchData = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      setLoading(true);
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const [tRes, sRes] = await Promise.all([
+        fetch(`${baseUrl}/admin/categories/tree`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+        fetch(`${baseUrl}/admin/categories/summary`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+      ]);
+      const [tData, sData] = await Promise.all([tRes.json(), sRes.json()]);
+
+      if (tData.success && Array.isArray(tData.tree)) {
+        setTree(tData.tree);
+        // Expand root nodes by default
+        const rootIds = new Set<string>(tData.tree.map((n: any) => n.id || n._id));
+        setExpandedNodes(rootIds);
+      }
+      if (sData.success && sData.summary) {
+        setSummary(sData.summary);
+      }
+    } catch (err) {
+      console.error("Failed to load category data", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accountHydrated || !accessToken) return;
+    void fetchData();
+  }, [accountHydrated, accessToken, fetchData]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Flatten tree for Parent Category selector
+  const availableParentOptions = useMemo(() => {
+    const options: { id: string; name: string; fullPath: string; level: number }[] = [];
+    const traverse = (nodes: CategoryTreeNode[], path: string, lvl: number) => {
+      nodes.forEach((n) => {
+        const curPath = path ? `${path} > ${n.name}` : n.name;
+        // Level 1 and Level 2 can be parents. Level 3 (Leaf) CANNOT be a parent.
+        if (lvl < 3) {
+          options.push({ id: n.id || n._id, name: n.name, fullPath: curPath, level: lvl });
+        }
+        if (n.children && n.children.length > 0) {
+          traverse(n.children, curPath, lvl + 1);
+        }
+      });
+    };
+    traverse(tree, "", 1);
+    return options;
+  }, [tree]);
+
+  // Computed level for the category being edited/added
+  const computedFormLevel = useMemo(() => {
+    if (!formData.parentCategory) return 1;
+    const parent = availableParentOptions.find((o) => o.id === formData.parentCategory);
+    return parent ? parent.level + 1 : 1;
+  }, [formData.parentCategory, availableParentOptions]);
+
+  const handleOpenAdd = (parentCatId?: string) => {
+    setEditingId(null);
+    setFormError("");
+    setFormData({
+      name: "",
+      slug: "",
+      parentCategory: parentCatId || "",
+      description: "",
+      image: "",
+      icon: "",
+      banner: "",
+      active: true,
+      sortOrder: 1,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (node: CategoryTreeNode) => {
+    setEditingId(node.id || node._id);
+    setFormError("");
+    setFormData({
+      name: node.name,
+      slug: node.slug,
+      parentCategory: node.parentCategory ? String(node.parentCategory) : "",
+      description: (node as any).description || "",
+      image: node.image || "",
+      icon: node.icon || "",
+      banner: node.banner || "",
+      active: node.active !== false,
+      sortOrder: node.sortOrder || 1,
+    });
+    setIsFormOpen(true);
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCategory(true);
+    setFormError("");
+
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const url = editingId ? `${baseUrl}/admin/categories/${editingId}` : `${baseUrl}/admin/categories`;
+      const method = editingId ? "PATCH" : "POST";
+
+      const payload = {
+        ...formData,
+        parentCategory: formData.parentCategory || null,
+        sortOrder: parseInt(String(formData.sortOrder), 10) || 0,
       };
 
-      if (name === "name" && !slugEdited) {
-        updated.slug = createSlug(nextValue);
-      }
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
-      return updated;
-    });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed to save category.");
 
-    setError("");
-    setMessage("");
+      setIsFormOpen(false);
+      void fetchData();
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally {
+      setSavingCategory(false);
+    }
   };
 
-  const validateForm = () => {
-    if (form.name.trim().length < 2) {
-      return "Please enter a valid category name.";
+  const handleArchiveCategory = async (catId: string, name: string) => {
+    if (!confirm(`Are you sure you want to archive category "${name}"?`)) return;
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/admin/categories/${catId}/archive`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Archive failed.");
+      void fetchData();
+    } catch (err: any) {
+      alert(err.message);
     }
-
-    if (!form.slug.trim()) {
-      return "Please enter a category slug.";
-    }
-
-    if (form.description.trim().length < 5) {
-      return "Description must contain at least 5 characters.";
-    }
-
-    if (!form.icon.trim()) {
-      return "Please enter a category icon.";
-    }
-
-    if (
-      !/^#[0-9A-Fa-f]{6}$/.test(
-        form.background.trim()
-      )
-    ) {
-      return "Background must be a valid hex color, for example #E8F5E4.";
-    }
-
-    const sortOrder = Number(form.sortOrder);
-    const displayOrder = Number(form.displayOrder);
-
-    if (
-      !Number.isInteger(sortOrder) ||
-      sortOrder < 0
-    ) {
-      return "Sort order must be a valid whole number.";
-    }
-
-    if (
-      !Number.isInteger(displayOrder) ||
-      displayOrder < 0
-    ) {
-      return "Display order must be a valid whole number.";
-    }
-
-    return "";
   };
 
-  const saveCategory = (
-    event: FormEvent<HTMLFormElement>
-  ) => {
-    event.preventDefault();
+  // CSV Import Handlers
+  const handleValidateCsv = async () => {
+    if (!importFile) return;
+    setValidatingCsv(true);
+    setImportError("");
+    setImportResult(null);
 
-    const validationError = validateForm();
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const fd = new FormData();
+      fd.append("file", importFile);
 
-    if (validationError) {
-      setError(validationError);
+      const res = await fetch(`${baseUrl}/admin/categories/import/validate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: fd,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "CSV validation failed.");
+      setCsvPreviewRows(data.rows || []);
+    } catch (err: any) {
+      setImportError(err.message);
+    } finally {
+      setValidatingCsv(false);
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    const validRows = csvPreviewRows.filter((r) => r.status === "VALID");
+    if (validRows.length === 0) {
+      alert("No valid rows to import.");
       return;
     }
 
-    const categoryData = {
-      name: form.name.trim(),
-      slug: form.slug.trim(),
-      description: form.description.trim(),
-      icon: form.icon.trim(),
-      background: form.background.trim(),
-      sortOrder: Number(form.sortOrder),
-      active: form.active,
-      image: form.image.trim(),
-      banner: form.banner.trim(),
-      featured: form.featured,
-      showOnHome: form.showOnHome,
+    setExecutingImport(true);
+    setImportError("");
 
-homeLayout: form.homeLayout,
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const res = await fetch(`${baseUrl}/admin/categories/import/execute`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rows: validRows,
+          mode: importMode,
+        }),
+      });
 
-displayOrder: Number(form.displayOrder),
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "CSV import execution failed.");
+      setImportResult(data);
+      void fetchData();
+    } catch (err: any) {
+      setImportError(err.message);
+    } finally {
+      setExecutingImport(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+    window.open(`${baseUrl}/admin/categories/import/template`, "_blank");
+  };
+
+  const handleExportCsv = () => {
+    const rows: string[] = ["name,slug,parentSlug,description,image,icon,banner,active,sortOrder,seoTitle,seoDescription"];
+
+    const escapeCsvValue = (val: string) => {
+      const escaped = val.replace(/"/g, '""');
+      if (escaped.includes(",") || escaped.includes('"') || escaped.includes("\n")) {
+        return `"${escaped}"`;
+      }
+      return escaped;
     };
 
-    if (editingCategory) {
-      updateCategory(
-        editingCategory.id,
-        categoryData
-      );
+    const traverse = (nodes: CategoryTreeNode[], parentSlug: string = "") => {
+      nodes.forEach((node) => {
+        const name = escapeCsvValue(node.name || "");
+        const slug = escapeCsvValue(node.slug || "");
+        const parent = escapeCsvValue(parentSlug);
+        const description = "";
+        const image = escapeCsvValue(node.image || "");
+        const icon = escapeCsvValue(node.icon || "");
+        const banner = escapeCsvValue(node.banner || "");
+        const active = node.active ? "true" : "false";
+        const sortOrder = String(node.sortOrder || 1);
+        const seoTitle = escapeCsvValue(node.name || "");
+        const seoDescription = "";
 
-      setMessage(
-        `${categoryData.name} updated successfully.`
-      );
-    } else {
-      addCategory(categoryData);
+        const row = [
+          name,
+          slug,
+          parent,
+          description,
+          image,
+          icon,
+          banner,
+          active,
+          sortOrder,
+          seoTitle,
+          seoDescription,
+        ].join(",");
+        rows.push(row);
 
-      setMessage(
-        `${categoryData.name} added successfully.`
-      );
-    }
+        if (node.children && node.children.length > 0) {
+          traverse(node.children, node.slug);
+        }
+      });
+    };
 
-    closeForm();
+    traverse(tree);
 
-    window.setTimeout(() => {
-      setMessage("");
-    }, 3000);
+    const blob = new Blob([rows.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "categories_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const confirmDeleteCategory = (
-    category: Category
-  ) => {
-    const assignedProducts =
-      categoryProductCounts[category.slug] ?? 0;
+  // Render tree node recursive component
+  const renderTreeNode = (node: CategoryTreeNode, depth: number = 1) => {
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = expandedNodes.has(node.id || node._id);
 
-    if (assignedProducts > 0) {
-      window.alert(
-        `This category contains ${assignedProducts} product${
-          assignedProducts === 1 ? "" : "s"
-        }. Move or delete those products first.`
-      );
-
-      return;
+    // Apply search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const match = node.name.toLowerCase().includes(q) || node.slug.toLowerCase().includes(q) || node.fullPath.toLowerCase().includes(q);
+      const childMatch = node.children?.some((c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q));
+      if (!match && !childMatch) return null;
     }
 
-    const confirmed = window.confirm(
-      `Delete "${category.name}" permanently from local categories?`
-    );
-
-    if (!confirmed) return;
-
-    removeCategory(category.id);
-
-    if (editingCategory?.id === category.id) {
-      closeForm();
+    // Apply level filter
+    if (levelFilter !== "ALL") {
+      const targetLvl = levelFilter === "L1" ? 1 : levelFilter === "L2" ? 2 : 3;
+      if (node.level !== targetLvl && (!node.children || !node.children.some((c) => c.level === targetLvl))) {
+        return null;
+      }
     }
 
-    setMessage(
-      `${category.name} deleted successfully.`
-    );
-
-    window.setTimeout(() => {
-      setMessage("");
-    }, 3000);
-  };
-
-  const confirmReset = () => {
-    const confirmed = window.confirm(
-      "Reset all category changes and restore default categories?"
-    );
-
-    if (!confirmed) return;
-
-    resetCategories();
-    closeForm();
-    setMessage("Default categories restored.");
-
-    window.setTimeout(() => {
-      setMessage("");
-    }, 3000);
-  };
-
-  if (!hydrated || !productsHydrated) {
     return (
-      <div className="min-h-screen bg-[var(--background)]">
-        <Header />
+      <div key={node.id || node._id} className="w-full">
+        <div
+          className={`flex items-center justify-between p-3 border-b border-slate-100 hover:bg-slate-50/80 transition ${
+            depth === 1 ? "bg-white font-bold" : depth === 2 ? "bg-slate-50/40 pl-8 font-medium" : "bg-slate-50/80 pl-16 font-normal"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={() => toggleExpand(node.id || node._id)}
+                className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-slate-200 text-slate-500"
+              >
+                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              </button>
+            ) : (
+              <div className="w-6" />
+            )}
 
-        <Container className="py-6">
-          <AdminLoadingSkeleton variant="page" />
-        </Container>
+            <div className="h-8 w-8 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+              {node.image ? (
+                <img src={node.image} alt={node.name} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-xs">{node.icon || "📦"}</span>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-900 font-bold">{node.name}</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                    node.level === 1
+                      ? "bg-purple-50 text-purple-700 border border-purple-200"
+                      : node.level === 2
+                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  }`}
+                >
+                  L{node.level} — {node.level === 1 ? "Main" : node.level === 2 ? "Subcategory" : "Leaf"}
+                </span>
+
+                {!node.active && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500">
+                    Inactive
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono block">/{node.slug}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+              <Package size={13} className="text-slate-400" />
+              <span>{node.productCount} products</span>
+            </div>
+
+            {node.level < 3 && (
+              <button
+                type="button"
+                onClick={() => handleOpenAdd(node.id || node._id)}
+                className="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-white text-[11px] font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                title="Add child subcategory"
+              >
+                <Plus size={12} />
+                Add Child
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleOpenEdit(node)}
+              className="h-7 px-2.5 rounded-lg border border-[var(--border)] bg-white text-[11px] font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+            >
+              <Pencil size={11} />
+              Edit
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleArchiveCategory(node.id || node._id, node.name)}
+              className="h-7 px-2.5 rounded-lg border border-red-200 bg-white text-[11px] font-bold text-red-700 hover:bg-red-50 flex items-center gap-1"
+            >
+              <Trash2 size={11} />
+              Archive
+            </button>
+          </div>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="divide-y divide-slate-100">
+            {node.children!.map((child) => renderTreeNode(child, depth + 1))}
+          </div>
+        )}
       </div>
     );
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Header />
 
-      <main>
-        <Container className="py-4 sm:py-8">
-          <AdminPageHeader
-            title="Category management"
-            description="Add, edit and control store categories"
-            action={
-              <div className="flex items-center gap-2">
-                <AdminPrimaryButton
-                  icon={<Plus size={15} />}
-                  onClick={openAddForm}
-                  className="px-3 text-[11px]"
-                >
-                  Add
-                </AdminPrimaryButton>
-                <button
-                  type="button"
-                  onClick={confirmReset}
-                  className="flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-[11px] font-black text-[var(--danger)]"
-                >
-                  <RefreshCw size={15} />
-                  Reset
-                </button>
-              </div>
-            }
-          />
-
-          {message && (
-            <div className="mb-5 flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs font-bold text-[var(--success)]">
-              <CheckCircle2 size={16} />
-              {message}
+      <main className="flex-1 py-8">
+        <Container className="max-w-7xl">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-xl font-black text-[var(--text-primary)] flex items-center gap-2">
+                <FolderTree size={22} className="text-[var(--primary)]" />
+                Category Master & Three-Level Hierarchy
+              </h1>
+              <p className="text-xs text-[var(--text-muted)]">
+                Strict 3-level catalog structure (Main → Subcategory → Leaf) with CSV import engine
+              </p>
             </div>
-          )}
 
-          {formOpen && (
-            <section className="mb-5 rounded-[26px] border border-[var(--primary)] bg-white p-4 shadow-[var(--shadow-md)] sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--primary)]">
-                    {editingCategory
-                      ? "Editing category"
-                      : "New category"}
-                  </p>
-
-                  <h2 className="mt-1 text-xl font-black text-[var(--text-primary)]">
-                    {editingCategory
-                      ? editingCategory.name
-                      : "Add category"}
-                  </h2>
-
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    Category changes are stored locally.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeForm}
-                  aria-label="Close form"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--surface-soft)] text-[var(--text-muted)]"
-                >
-                  <X size={17} />
-                </button>
-              </div>
-
-              <form
-                onSubmit={saveCategory}
-                className="mt-6"
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="h-10 px-3.5 rounded-xl border border-[var(--border)] bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-sm"
               >
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <CategoryField
-                    label="Category name"
-                    name="name"
-                    value={form.name}
-                    placeholder="Fruits & Vegetables"
-                    onChange={updateField}
-                    required
-                  />
+                <Download size={15} className="text-slate-500" />
+                CSV Template
+              </button>
 
-                  <CategoryField
-                    label="Slug"
-                    name="slug"
-                    value={form.slug}
-                    placeholder="fruits-vegetables"
-                    onChange={updateField}
-                    required
-                  />
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="h-10 px-3.5 rounded-xl border border-[var(--border)] bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 shadow-sm"
+              >
+                <Download size={15} className="text-slate-500" />
+                Export CSV
+              </button>
 
-                  <CategoryField
-                    label="Icon"
-                    name="icon"
-                    value={form.icon}
-                    placeholder="🥦"
-                    onChange={updateField}
-                    required
-                  />
+              <button
+                type="button"
+                onClick={() => {
+                  setImportFile(null);
+                  setCsvPreviewRows([]);
+                  setImportResult(null);
+                  setImportError("");
+                  setIsImportOpen(true);
+                }}
+                className="h-10 px-3.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100 flex items-center gap-1.5 shadow-sm"
+              >
+                <Upload size={15} />
+                Import CSV
+              </button>
 
-                  <CategoryField
-                    label="Background color"
-                    name="background"
-                    value={form.background}
-                    placeholder="#E8F5E4"
-                    onChange={updateField}
-                    required
-                  />
-                  <ImageUploader
-                    label="Category Image"
-                    value={
-                      form.image
-                        ? [
-                            {
-                              id: "category-image",
-                              url: form.image,
-                              name: "Category image",
-                              progress: form.image.startsWith("blob:")
-                                ? 0
-                                : 100,
-                              status: form.image.startsWith("blob:")
-                                ? "ready"
-                                : "uploaded",
-                            },
-                          ]
-                        : []
-                    }
-                    onChange={(items) =>
-                      setForm((current) => ({
-                        ...current,
-                        image: items[0]?.url ?? "",
-                      }))
-                    }
-                  />
+              <button
+                type="button"
+                onClick={() => void fetchData()}
+                className="h-10 w-10 flex items-center justify-center rounded-xl border border-[var(--border)] bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
+              >
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+              </button>
 
-                  <ImageUploader
-                    label="Category Banner"
-                    value={
-                      form.banner
-                        ? [
-                            {
-                              id: "category-banner",
-                              url: form.banner,
-                              name: "Category banner",
-                              progress: form.banner.startsWith("blob:")
-                                ? 0
-                                : 100,
-                              status: form.banner.startsWith("blob:")
-                                ? "ready"
-                                : "uploaded",
-                            },
-                          ]
-                        : []
-                    }
-                    onChange={(items) =>
-                      setForm((current) => ({
-                        ...current,
-                        banner: items[0]?.url ?? "",
-                      }))
-                    }
-                  />
+              <button
+                type="button"
+                onClick={() => handleOpenAdd()}
+                className="h-10 px-4 rounded-xl bg-[var(--primary)] text-white text-xs font-bold hover:brightness-95 flex items-center gap-1.5 shadow-sm"
+              >
+                <Plus size={16} />
+                Add Category
+              </button>
+            </div>
+          </div>
 
-                  <CategoryField
-                    label="Sort order"
-                    name="sortOrder"
-                    value={form.sortOrder}
-                    placeholder="1"
-                    inputMode="numeric"
-                    onChange={updateField}
-                    required
-                  />
-                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
-  <input
-    type="checkbox"
-    checked={form.showOnHome}
-    onChange={(e) =>
-      setForm((prev) => ({
-        ...prev,
-        showOnHome: e.target.checked,
-      }))
-    }
-  />
+          {/* Summary Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-6">
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-slate-400 block">Total</span>
+              <p className="text-xl font-black text-slate-900">{summary?.total ?? 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-purple-600 block">L1 Main</span>
+              <p className="text-xl font-black text-purple-700">{summary?.mainCategories ?? 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-blue-600 block">L2 Sub</span>
+              <p className="text-xl font-black text-blue-700">{summary?.subcategories ?? 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-emerald-600 block">L3 Leaf</span>
+              <p className="text-xl font-black text-emerald-700">{summary?.leafCategories ?? 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-emerald-600 block">Active</span>
+              <p className="text-xl font-black text-slate-900">{summary?.active ?? 0}</p>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm">
+              <span className="text-[11px] font-bold text-slate-400 block">Inactive</span>
+              <p className="text-xl font-black text-slate-500">{summary?.inactive ?? 0}</p>
+            </div>
+          </div>
 
-  <span className="text-sm font-medium">
-    Show on Home Page
-  </span>
-</div>
+          {/* Notice: Home Merchandising Separation */}
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-600 shrink-0" />
+              <span>
+                <strong>Category Master Notice:</strong> Home placement, banners, and layouts are controlled from{" "}
+                <strong>Home Merchandising</strong>.
+              </span>
+            </div>
+            <Link
+              href="/admin/home-builder"
+              className="px-3 py-1 bg-amber-600 text-white rounded-lg text-[11px] font-bold hover:bg-amber-700 flex items-center gap-1 shrink-0"
+            >
+              Open Home Merchandising
+              <ExternalLink size={12} />
+            </Link>
+          </div>
 
-<div className="space-y-2">
-  <label className="text-sm font-medium">
-    Home Layout
-  </label>
+          {/* Search & Filters */}
+          <div className="bg-white p-4 rounded-2xl border border-[var(--border)] shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder="Search categories by name, slug or path..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-9 pr-3 rounded-xl border border-[var(--border)] text-xs outline-none focus:border-[var(--primary)]"
+              />
+            </div>
 
-  <select
-    value={form.homeLayout}
-    onChange={(e) =>
-      setForm((prev) => ({
-        ...prev,
-        homeLayout: e.target.value as
-          "grid" | "slider",
-      }))
-    }
-    className="w-full rounded-xl border border-gray-300 px-3 py-2"
-  >
-    <option value="grid">Grid</option>
-    <option value="slider">Slider</option>
-  </select>
-</div>
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <span className="text-slate-400 text-[11px]">Filter Level:</span>
+              {(["ALL", "L1", "L2", "L3"] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setLevelFilter(lvl)}
+                  className={`px-3 py-1 rounded-lg border text-xs font-bold transition ${
+                    levelFilter === lvl
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 border-[var(--border)] hover:bg-slate-50"
+                  }`}
+                >
+                  {lvl === "ALL" ? "All Levels" : lvl === "L1" ? "L1 Main" : lvl === "L2" ? "L2 Sub" : "L3 Leaf"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-<CategoryField
-  label="Display Order"
-  name="displayOrder"
-  value={form.displayOrder}
-  placeholder="1"
-  inputMode="numeric"
-  onChange={updateField}
-/>
+          {/* Tree View Table */}
+          <div className="bg-white rounded-3xl border border-[var(--border)] shadow-sm overflow-hidden">
+            <div className="p-4 bg-slate-50/60 border-b border-slate-100 text-[11px] font-black uppercase text-slate-400 flex items-center justify-between">
+              <span>Category Hierarchy Structure</span>
+              <span>Actions & Assigned Products</span>
+            </div>
 
-                  <label className="flex items-end">
-                    <span className="flex h-12 w-full items-center justify-between rounded-xl bg-[var(--surface-soft)] px-4">
-                      <span>
-                        <span className="block text-xs font-black text-[var(--text-primary)]">
-                          Active category
-                        </span>
+            <div className="divide-y divide-slate-100">
+              {tree.map((rootNode) => renderTreeNode(rootNode, 1))}
 
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          Visible to customers
-                        </span>
-                      </span>
-
-                      <input
-                        type="checkbox"
-                        checked={form.active}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            active:
-                              event.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 accent-[var(--primary)]"
-                      />
-                    </span>
-                  </label>
-
-                  <label className="flex items-end">
-                    <span className="flex h-12 w-full items-center justify-between rounded-xl bg-[var(--surface-soft)] px-4">
-                      <span>
-                        <span className="block text-xs font-black text-[var(--text-primary)]">
-                          Featured category
-                        </span>
-
-                        <span className="text-[9px] text-[var(--text-muted)]">
-                          Highlight this category
-                        </span>
-                      </span>
-
-                      <input
-                        type="checkbox"
-                        checked={form.featured}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            featured:
-                              event.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 accent-[var(--primary)]"
-                      />
-                    </span>
-                  </label>
-
-                  <label className="block sm:col-span-2 lg:col-span-3">
-                    <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
-                      Description
-                      <span className="ml-1 text-[var(--danger)]">
-                        *
-                      </span>
-                    </span>
-
-                    <textarea
-                      name="description"
-                      value={form.description}
-                      onChange={updateField}
-                      rows={4}
-                      placeholder="Category description"
-                      className="w-full resize-none rounded-xl border border-[var(--border)] bg-white p-4 text-sm font-semibold outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
-                    />
-                  </label>
+              {tree.length === 0 && (
+                <div className="py-16 text-center text-xs text-slate-400">
+                  No categories found. Click "Add Category" or "Import CSV" to get started.
                 </div>
+              )}
+            </div>
+          </div>
 
-                <div className="mt-5 flex items-center gap-4 rounded-2xl border border-[var(--border)] p-4">
-                  <span
-                    className="flex h-16 w-16 items-center justify-center rounded-[18px] text-[36px]"
-                    style={{
-                      backgroundColor:
-                        form.background ||
-                        "#F2F5EF",
-                    }}
-                  >
-                    {form.icon || "📦"}
-                  </span>
-
-                  <div>
-                    <p className="text-sm font-black text-[var(--text-primary)]">
-                      {form.name ||
-                        "Category preview"}
-                    </p>
-
-                    <p className="mt-1 text-[10px] text-[var(--text-muted)]">
-                      /category/
-                      {form.slug || "category-slug"}
-                    </p>
+          {/* Modal: Add / Edit Category */}
+          {isFormOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-[var(--border)] max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-800">
+                      {editingId ? "Edit Category" : "Add New Category"}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
+                      Level {computedFormLevel} — {computedFormLevel === 1 ? "Main" : computedFormLevel === 2 ? "Subcategory" : "Leaf"}
+                    </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsFormOpen(false)}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
 
-                {error && (
-                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-[var(--danger)]">
-                    {error}
+                {formError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2 mb-4">
+                    <AlertCircle size={14} />
+                    {formError}
                   </div>
                 )}
 
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <AdminPrimaryButton
-                    type="submit"
-                    icon={<Save size={17} />}
-                    className="h-12 flex-1 rounded-2xl text-sm"
-                  >
-                    {editingCategory
-                      ? "Update category"
-                      : "Save category"}
-                  </AdminPrimaryButton>
+                <form onSubmit={handleSaveCategory} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Parent Category *</label>
+                    <select
+                      value={formData.parentCategory}
+                      onChange={(e) => setFormData((p) => ({ ...p, parentCategory: e.target.value }))}
+                      className="w-full h-10 px-3 border border-[var(--border)] rounded-xl text-xs font-bold outline-none focus:border-[var(--primary)] bg-white"
+                    >
+                      <option value="">No Parent — Create Main Category (Level 1)</option>
+                      {availableParentOptions
+                        .filter((opt) => opt.id !== editingId)
+                        .map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.fullPath} (Level {opt.level})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={closeForm}
-                    className="flex h-12 flex-1 items-center justify-center rounded-2xl border border-[var(--border)] text-sm font-black text-[var(--text-secondary)]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </section>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Category Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Fresh Fruits"
+                        value={formData.name}
+                        onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                        className="w-full h-10 px-3 border rounded-xl text-xs font-bold outline-none focus:border-[var(--primary)]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Slug *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. fresh-fruits"
+                        value={formData.slug}
+                        onChange={(e) => setFormData((p) => ({ ...p, slug: e.target.value.toLowerCase() }))}
+                        className="w-full h-10 px-3 border rounded-xl text-xs font-mono outline-none focus:border-[var(--primary)]"
+                      />
+                    </div>
+                  </div>
+
+                  {computedFormLevel === 1 ? (
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Icon / Emoji</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 🍎"
+                        value={formData.icon}
+                        onChange={(e) => setFormData((p) => ({ ...p, icon: e.target.value }))}
+                        className="w-full h-10 px-3 border rounded-xl text-xs outline-none focus:border-[var(--primary)]"
+                      />
+                    </div>
+                  ) : (
+                    <div className="mt-1">
+                      <ImageUploader
+                        label={computedFormLevel === 2 ? "Sub-Category Image" : "Leaf Category Image"}
+                        value={
+                          formData.image
+                            ? [
+                                {
+                                  id: "category-image",
+                                  url: formData.image,
+                                  name: "Category image",
+                                  progress: formData.image.startsWith("blob:") ? 0 : 100,
+                                  status: formData.image.startsWith("blob:")
+                                    ? "ready"
+                                    : "uploaded",
+                                },
+                              ]
+                            : []
+                        }
+                        onChange={(items) => {
+                          void updateCategoryImage(items);
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Description</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Category description..."
+                      value={formData.description}
+                      onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+                      className="w-full p-2.5 border rounded-xl text-xs outline-none focus:border-[var(--primary)]"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-6 pt-2">
+                    <label className="flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.active}
+                        onChange={(e) => setFormData((p) => ({ ...p, active: e.target.checked }))}
+                        className="rounded accent-[var(--primary)]"
+                      />
+                      Active Status
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <label className="font-bold text-slate-700">Sort Order:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.sortOrder}
+                        onChange={(e) => setFormData((p) => ({ ...p, sortOrder: parseInt(e.target.value, 10) || 0 }))}
+                        className="w-20 h-9 px-2 border rounded-xl font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsFormOpen(false)}
+                      className="h-10 px-4 rounded-xl border text-xs font-bold text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingCategory}
+                      className="h-10 px-5 rounded-xl bg-[var(--primary)] text-white text-xs font-bold hover:brightness-95 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <Save size={14} />
+                      {savingCategory ? "Saving..." : "Save Category"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
 
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard
-              label="Total categories"
-              value={stats.total.toString()}
-            />
+          {/* Modal: CSV Import Workflow */}
+          {isImportOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-3xl w-full shadow-2xl border border-[var(--border)] max-h-[90vh] overflow-y-auto space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet size={20} className="text-purple-600" />
+                    <h3 className="text-base font-black text-slate-800">
+                      Bulk Category CSV Import Engine
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsImportOpen(false)}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
 
-            <StatCard
-              label="Active"
-              value={stats.active.toString()}
-            />
+                {importError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium flex items-center gap-2">
+                    <AlertCircle size={14} />
+                    {importError}
+                  </div>
+                )}
 
-            <StatCard
-              label="Inactive"
-              value={stats.inactive.toString()}
-            />
+                {importResult && (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <CheckCircle2 size={16} className="text-emerald-600" />
+                      Import Execution Completed! (Batch ID: {importResult.batchId})
+                    </p>
+                    <p>Created: <strong>{importResult.createdCount}</strong> • Updated: <strong>{importResult.updatedCount}</strong> • Skipped: <strong>{importResult.skippedCount}</strong></p>
+                  </div>
+                )}
 
-            <StatCard
-              label="Assigned products"
-              value={stats.assignedProducts.toString()}
-            />
-          </section>
+                {/* Upload & Validate Step */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-700">Select Category CSV File</span>
+                    <button
+                      type="button"
+                      onClick={downloadTemplate}
+                      className="text-[11px] font-bold text-purple-700 underline"
+                    >
+                      Download Template CSV
+                    </button>
+                  </div>
 
-          <section className="mt-5 rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)]">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_200px]">
-              <AdminSearchBar
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search category"
-              />
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="text-xs file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                    />
 
-              <select
-                value={filter}
-                onChange={(event) =>
-                  setFilter(
-                    event.target
-                      .value as CategoryFilter
-                  )
-                }
-                className="h-11 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-bold outline-none"
-              >
-                <option value="All">
-                  All categories
-                </option>
-                <option value="Active">
-                  Active
-                </option>
-                <option value="Inactive">
-                  Inactive
-                </option>
-              </select>
-            </div>
-          </section>
+                    <button
+                      type="button"
+                      disabled={!importFile || validatingCsv}
+                      onClick={handleValidateCsv}
+                      className="h-9 px-4 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {validatingCsv ? "Validating..." : "Validate CSV"}
+                    </button>
+                  </div>
+                </div>
 
-          {filteredCategories.length === 0 ? (
-            <AdminEmptyState
-              title="No matching categories"
-              icon={Grid2X2}
-              className="mt-5"
-            />
-          ) : (
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {filteredCategories.map(
-                (category) => (
-                  <CategoryCard
-                    key={category.id}
-                    category={category}
-                    assignedProducts={
-                      categoryProductCounts[
-                        category.slug
-                      ] ?? 0
-                    }
-                    onEdit={() =>
-                      openEditForm(category)
-                    }
-                    onToggleActive={() =>
-                      toggleCategoryActive(
-                        category.id
-                      )
-                    }
-                    onDelete={() =>
-                      confirmDeleteCategory(
-                        category
-                      )
-                    }
-                  />
-                )
-              )}
+                {/* Validation Preview Table */}
+                {csvPreviewRows.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-black text-slate-800">
+                        Validation Preview ({csvPreviewRows.length} rows)
+                      </span>
+                      <div className="flex items-center gap-3 font-bold">
+                        <span className="text-emerald-600">
+                          ✓ {csvPreviewRows.filter((r) => r.status === "VALID").length} Valid
+                        </span>
+                        <span className="text-red-600">
+                          ✕ {csvPreviewRows.filter((r) => r.status === "ERROR").length} Errors
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="border rounded-2xl overflow-hidden max-h-60 overflow-y-auto text-xs">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-[10px] font-black uppercase text-slate-500 border-b">
+                            <th className="p-2">Row</th>
+                            <th className="p-2">Name</th>
+                            <th className="p-2">Slug</th>
+                            <th className="p-2">Parent</th>
+                            <th className="p-2">Level</th>
+                            <th className="p-2">Full Path</th>
+                            <th className="p-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-[11px]">
+                          {csvPreviewRows.map((r) => (
+                            <tr key={r.rowIndex} className={r.status === "ERROR" ? "bg-red-50/60" : "bg-white"}>
+                              <td className="p-2 font-mono">{r.rowIndex}</td>
+                              <td className="p-2 font-bold">{r.name}</td>
+                              <td className="p-2 font-mono text-slate-500">{r.slug}</td>
+                              <td className="p-2 font-mono text-slate-500">{r.parentSlug || "--"}</td>
+                              <td className="p-2 font-bold">L{r.computedLevel}</td>
+                              <td className="p-2 text-slate-600 truncate max-w-xs">{r.fullPath}</td>
+                              <td className="p-2">
+                                {r.status === "VALID" ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800">
+                                    VALID ({r.action})
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-800" title={r.errors.join(", ")}>
+                                    ERROR
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-4 text-xs font-bold">
+                        <span className="text-slate-500">Import Mode:</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="importMode"
+                            checked={importMode === "CREATE_ONLY"}
+                            onChange={() => setImportMode("CREATE_ONLY")}
+                            className="accent-[var(--primary)]"
+                          />
+                          Create Only (Skip Existing)
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="importMode"
+                            checked={importMode === "UPSERT_BY_SLUG"}
+                            onChange={() => setImportMode("UPSERT_BY_SLUG")}
+                            className="accent-[var(--primary)]"
+                          />
+                          Upsert By Slug
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={executingImport || csvPreviewRows.filter((r) => r.status === "VALID").length === 0}
+                        onClick={handleExecuteImport}
+                        className="h-10 px-6 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {executingImport ? "Executing..." : "Execute Bulk Import"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </Container>
       </main>
     </div>
-  );
-}
-
-function CategoryCard({
-  category,
-  assignedProducts,
-  onEdit,
-  onToggleActive,
-  onDelete,
-}: {
-  category: Category;
-  assignedProducts: number;
-  onEdit: () => void;
-  onToggleActive: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <article
-      className={`overflow-hidden rounded-[24px] border bg-white shadow-[var(--shadow-sm)] ${
-        category.active
-          ? "border-[var(--border)]"
-          : "border-red-200 opacity-80"
-      }`}
-    >
-      <div className="flex items-start gap-4 p-4">
-        <span
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] text-[34px]"
-          style={{
-            backgroundColor:
-              category.background,
-          }}
-        >
-          {category.icon}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-black text-[var(--text-primary)]">
-                {category.name}
-              </h2>
-
-              <p className="mt-1 truncate text-[10px] text-[var(--primary)]">
-                {category.slug}
-              </p>
-            </div>
-
-            <AdminStatusBadge
-              label={category.active ? "Active" : "Inactive"}
-              tone={category.active ? "success" : "danger"}
-              className="text-[9px]"
-            />
-          </div>
-
-          <p className="mt-3 line-clamp-2 text-[11px] leading-5 text-[var(--text-secondary)]">
-            {category.description}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 divide-x divide-[var(--border)] border-y border-[var(--border)] bg-[var(--surface-soft)]">
-        <div className="p-3 text-center">
-          <p className="text-sm font-black text-[var(--text-primary)]">
-            {assignedProducts}
-          </p>
-
-          <p className="mt-1 text-[9px] text-[var(--text-muted)]">
-            Products
-          </p>
-        </div>
-
-        <div className="p-3 text-center">
-          <p className="text-sm font-black text-[var(--text-primary)]">
-            {category.sortOrder}
-          </p>
-
-          <p className="mt-1 text-[9px] text-[var(--text-muted)]">
-            Sort order
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 p-4">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-[var(--primary)] text-[10px] font-black text-[var(--primary)]"
-        >
-          <Pencil size={14} />
-          Edit
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleActive}
-          className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-[10px] font-black ${
-            category.active
-              ? "bg-amber-50 text-amber-700"
-              : "bg-green-50 text-[var(--success)]"
-          }`}
-        >
-          {category.active ? (
-            <EyeOff size={14} />
-          ) : (
-            <Eye size={14} />
-          )}
-
-          {category.active
-            ? "Disable"
-            : "Enable"}
-        </button>
-
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex h-10 items-center justify-center gap-1.5 rounded-xl bg-red-50 text-[10px] font-black text-[var(--danger)]"
-        >
-          <Trash2 size={14} />
-          Delete
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <article className="rounded-[20px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-xs)]">
-      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]">
-        <Grid2X2 size={19} />
-      </span>
-
-      <p className="mt-4 text-xl font-black text-[var(--text-primary)]">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[10px] font-bold text-[var(--text-muted)]">
-        {label}
-      </p>
-    </article>
-  );
-}
-
-type CategoryFieldProps = {
-  label: string;
-  name: keyof CategoryForm;
-  value: string;
-  placeholder: string;
-  required?: boolean;
-  inputMode?: "text" | "numeric";
-  onChange: (
-    event: ChangeEvent<HTMLInputElement>
-  ) => void;
-};
-
-function CategoryField({
-  label,
-  name,
-  value,
-  placeholder,
-  required = false,
-  inputMode = "text",
-  onChange,
-}: CategoryFieldProps) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
-        {label}
-
-        {required && (
-          <span className="ml-1 text-[var(--danger)]">
-            *
-          </span>
-        )}
-      </span>
-
-      <input
-        type="text"
-        name={name}
-        value={value}
-        required={required}
-        inputMode={inputMode}
-        placeholder={placeholder}
-        onChange={onChange}
-        className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-semibold outline-none focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
-      />
-    </label>
   );
 }

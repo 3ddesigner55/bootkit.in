@@ -2,9 +2,16 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
-const stores = [
+export interface SpotlightStore {
+  name: string;
+  description?: string;
+  image?: string;
+  delivery?: string;
+  href: string;
+}
+
+const DEFAULT_STORES: SpotlightStore[] = [
   {
     name: "Fresh Mart",
     description: "Fresh fruits, vegetables & daily essentials",
@@ -21,16 +28,34 @@ const stores = [
   },
 ];
 
-export default function StoreSpotlight() {
+interface StoreSpotlightProps {
+  stores?: SpotlightStore[];
+  title?: string;
+}
+
+export default function StoreSpotlight({
+  stores: initialStores,
+  title = "Store Spotlight",
+}: StoreSpotlightProps = {}) {
+  const isDynamicMode = initialStores !== undefined;
+
+  if (isDynamicMode && (!initialStores || initialStores.length === 0)) {
+    return null;
+  }
+
+  const activeStores = isDynamicMode ? initialStores : DEFAULT_STORES;
+
+  if (!activeStores || activeStores.length === 0) {
+    return null;
+  }
+
   return (
     <section className="mt-8">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-black">
-          ⭐ Store Spotlight
-        </h2>
+        <h2 className="text-lg font-black">⭐ {title}</h2>
 
         <Link
-          href="/stores"
+          href="/categories"
           className="text-sm font-semibold text-[var(--primary)]"
         >
           View All
@@ -38,7 +63,7 @@ export default function StoreSpotlight() {
       </div>
 
       <div className="space-y-4">
-        {stores.map((store) => (
+        {activeStores.map((store) => (
           <Link
             key={store.name}
             href={store.href}
@@ -46,7 +71,7 @@ export default function StoreSpotlight() {
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#F5F8F5]">
               <Image
-                src={store.image}
+                src={store.image || "/images/stores/fresh-mart.png"}
                 alt={store.name}
                 width={48}
                 height={48}
@@ -55,23 +80,11 @@ export default function StoreSpotlight() {
             </div>
 
             <div className="flex-1">
-              <h3 className="font-bold">
-                {store.name}
-              </h3>
-
-              <p className="mt-1 text-xs text-gray-500">
-                {store.description}
-              </p>
-
-              <p className="mt-2 text-xs font-semibold text-[var(--primary)]">
-                {store.delivery}
+              <h3 className="font-bold">{store.name}</h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                {store.description || store.delivery || "Fast local fulfillment"}
               </p>
             </div>
-
-            <ArrowRight
-              size={20}
-              className="text-[var(--primary)]"
-            />
           </Link>
         ))}
       </div>

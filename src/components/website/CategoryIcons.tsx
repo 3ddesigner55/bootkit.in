@@ -2,15 +2,25 @@
 
 import Link from "next/link";
 import Container from "@/components/ui/Container";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
+import { getCategories } from "@/services/category.service";
+import { useEffect, useState } from "react";
 
 export default function CategoryIcons() {
-  const {
-    activeCategories: categories,
-    hydrated,
-  } = useAdminCategories();
+  const [categories, setCategories] = useState<any[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
-  if (!hydrated) return null;
+  useEffect(() => {
+    void getCategories()
+      .then((cats) => {
+        setCategories(cats);
+        setHydrated(true);
+      })
+      .catch(() => {
+        setCategories([]);
+        setHydrated(true);
+      });
+  }, []);
+
 
   return (
     <section className="py-10">

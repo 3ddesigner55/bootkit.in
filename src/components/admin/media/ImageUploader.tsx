@@ -62,6 +62,7 @@ export default function ImageUploader({
   );
   const [error, setError] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [draggedItemId, setDraggedItemId] = useState("");
 
   useEffect(() => {
     if (value !== undefined) {
@@ -154,6 +155,22 @@ export default function ImageUploader({
   const openReplaceDialog = (itemId: string) => {
     replaceItemId.current = itemId;
     replaceInputRef.current?.click();
+  };
+
+  const reorderItems = (targetItemId: string) => {
+    if (!multiple || !draggedItemId || draggedItemId === targetItemId) {
+      return;
+    }
+
+    const sourceIndex = items.findIndex((item) => item.id === draggedItemId);
+    const targetIndex = items.findIndex((item) => item.id === targetItemId);
+
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const nextItems = [...items];
+    const [sourceItem] = nextItems.splice(sourceIndex, 1);
+    nextItems.splice(targetIndex, 0, sourceItem);
+    updateItems(nextItems);
   };
 
   const replaceItem = (event: ChangeEvent<HTMLInputElement>) => {
@@ -288,6 +305,17 @@ export default function ImageUploader({
           {items.map((item) => (
             <article
               key={item.id}
+              draggable={multiple && !disabled}
+              onDragStart={() => setDraggedItemId(item.id)}
+              onDragEnd={() => setDraggedItemId("")}
+              onDragOver={(event) => {
+                if (multiple) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                reorderItems(item.id);
+                setDraggedItemId("");
+              }}
               className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white"
             >
               <div

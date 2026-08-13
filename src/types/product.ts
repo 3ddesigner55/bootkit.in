@@ -3,7 +3,6 @@ export type ProductUnit = {
   value: string;
 };
 
-
 export type ProductVariant = {
   id: string;
   name: string;
@@ -30,11 +29,11 @@ export type Product = {
   description: string;
   id: string;
   name: string;
-    
+
   slug: string;
   brand: string;
   categorySlug: string;
-  variants?:ProductVariant[];
+  variants?: ProductVariant[];
   tags?: string[];
   image: string;
   images?: string[];
@@ -61,4 +60,11 @@ export type Product = {
   showOnHome: boolean;
   displayOrder: number;
   active: boolean;
+  attributes?: { label: string; value: string }[];
+  highlights?: string[];
+  videoUrl?: string;
+  ingredients?: string;
+  storageInstructions?: string;
+  usageInstructions?: string;
+  replacementPolicy?: string;
 };

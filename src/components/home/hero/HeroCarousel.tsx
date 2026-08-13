@@ -4,37 +4,75 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
+import { getHeroBanners } from "@/services/hero.service";
+import type { CustomerHeroBanner } from "@/services/customerApi.types";
 
-const banners = [
-  {
-    title: "Fresh groceries,\ndelivered beautifully.",
-    subtitle: "Premium groceries delivered in just 10–20 minutes.",
-    image: "/images/banners/banner1.png",
-  },
-  {
-    title: "Farm Fresh\nEvery Morning.",
-    subtitle: "Fresh fruits & vegetables directly from local farms.",
-    image: "/images/banners/banner2.png",
-  },
-  {
-    title: "Everything You Need.\nOne Tap Away.",
-    subtitle: "Milk, snacks, drinks and daily essentials.",
-    image: "/images/banners/banner3.png",
-  },
-];
+export type CarouselBanner = Pick<CustomerHeroBanner, "title" | "subtitle"> & {
+  image: string;
+  linkUrl?: string;
+};
 
-export default function HeroCarousel() {
+function toCarouselBanner(banner: CustomerHeroBanner): CarouselBanner {
+  return {
+    title: banner.title,
+    subtitle: banner.subtitle || "",
+    image: banner.desktopImage || banner.mobileImage || "/images/banners/placeholder.png",
+    linkUrl: banner.buttonLink || "/products",
+  };
+}
+
+interface HeroCarouselProps {
+  banners?: CarouselBanner[];
+}
+
+export default function HeroCarousel({ banners: initialBanners }: HeroCarouselProps = {}) {
+  const isDynamicMode = initialBanners !== undefined;
   const [current, setCurrent] = useState(0);
+  const [banners, setBanners] = useState<CarouselBanner[]>(initialBanners || []);
 
   useEffect(() => {
+    if (isDynamicMode) {
+      setBanners(initialBanners || []);
+      return;
+    }
+
+    let cancelled = false;
+
+    void getHeroBanners()
+      .then((nextBanners) => {
+        if (!cancelled) {
+          setBanners(nextBanners.map(toCarouselBanner));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBanners([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialBanners, isDynamicMode]);
+
+  useEffect(() => {
+    if (banners.length < 2) {
+      return;
+    }
+
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % banners.length);
     }, 4000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [banners.length]);
 
-  const banner = banners[current];
+  if (banners.length === 0) {
+    return null;
+  }
+
+  const banner = banners[current] || banners[0];
+  if (!banner) return null;
 
   return (
     <section className="mt-6">
@@ -53,12 +91,14 @@ export default function HeroCarousel() {
               {banner.title}
             </h2>
 
-            <p className="mt-3 text-sm text-white/80">
-              {banner.subtitle}
-            </p>
+            {banner.subtitle ? (
+              <p className="mt-3 text-sm text-white/80">
+                {banner.subtitle}
+              </p>
+            ) : null}
 
             <Link
-              href="/products"
+              href={banner.linkUrl || "/products"}
               className="mt-5 inline-flex items-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-bold text-[#166534] transition hover:scale-105"
             >
               Shop Now
@@ -73,26 +113,11 @@ export default function HeroCarousel() {
               alt={banner.title}
               width={210}
               height={210}
+              className="h-full w-full object-contain drop-shadow-[0_20px_25px_rgba(0,0,0,.35)]"
               priority
-              className="object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.25)] transition-transform duration-500 hover:scale-105"
             />
           </div>
         </div>
-      </div>
-
-      {/* Indicators */}
-      <div className="mt-4 flex justify-center gap-2">
-        {banners.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrent(index)}
-            className={`transition-all duration-300 ${
-              current === index
-                ? "h-2 w-8 rounded-full bg-[var(--primary)]"
-                : "h-2 w-2 rounded-full bg-gray-300"
-            }`}
-          />
-        ))}
       </div>
     </section>
   );

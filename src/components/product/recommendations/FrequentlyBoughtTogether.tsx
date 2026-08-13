@@ -6,21 +6,31 @@ import {
   Plus,
   ShoppingBag,
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
-import { useCart } from "@/hooks/useCart";
+import { getProducts } from "@/services/product.service";
+import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/types/product";
+import { useCart } from "@/hooks/useCart";
 
 type FrequentlyBoughtTogetherProps = {
-  product: Product;
+  product: any;
 };
 
 export default function FrequentlyBoughtTogether({
   product,
 }: FrequentlyBoughtTogetherProps) {
   const { addItem, hydrated } = useCart();
-  const { activeProducts } = useAdminProducts();
+  const [activeProducts, setActiveProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    void getProducts({ limit: 50 })
+      .then((res) => {
+        setActiveProducts(res.items);
+      })
+      .catch(() => {
+        setActiveProducts([]);
+      });
+  }, []);
 
   const suggestedProducts = useMemo(
     () =>
@@ -48,9 +58,11 @@ export default function FrequentlyBoughtTogether({
     [product, suggestedProducts]
   );
 
-  const [selectedIds, setSelectedIds] = useState<string[]>(() =>
-    allProducts.map((item) => item.id)
-  );
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedIds(allProducts.map((item) => item.id));
+  }, [allProducts]);
 
   const selectedProducts = allProducts.filter((item) =>
     selectedIds.includes(item.id)

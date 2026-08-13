@@ -16,6 +16,9 @@ type ProductCollectionBottomSheetProps = {
   categories: ProductCollectionCategory[];
   initialCategory: string;
   showSearch?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  onCategoryChange?: (category: ProductCollectionCategory) => void;
   onClose: () => void;
 };
 
@@ -26,6 +29,9 @@ export default function ProductCollectionBottomSheet({
   categories,
   initialCategory,
   showSearch = false,
+  loading = false,
+  error = null,
+  onCategoryChange,
   onClose,
 }: ProductCollectionBottomSheetProps) {
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -55,11 +61,13 @@ export default function ProductCollectionBottomSheet({
   }, [initialCategory, open]);
 
   const selectedProducts = useMemo(() => {
-    const category = categories.find((item) => item.title === selectedCategory);
     const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
 
     return products.filter((product) => {
-      const matchesCategory = category?.matches(product) ?? false;
+      const category = categories.find((item) => item.title === selectedCategory);
+      const matchesCategory = onCategoryChange
+        ? true
+        : (category?.matches?.(product) ?? false);
       const matchesSearch =
         normalizedSearch === "" ||
         product.name.toLocaleLowerCase().includes(normalizedSearch) ||
@@ -67,7 +75,7 @@ export default function ProductCollectionBottomSheet({
 
       return product.active && matchesCategory && matchesSearch;
     });
-  }, [categories, products, searchQuery, selectedCategory]);
+  }, [categories, onCategoryChange, products, searchQuery, selectedCategory]);
 
   if (!open) {
     return null;
@@ -142,7 +150,10 @@ export default function ProductCollectionBottomSheet({
                   <button
                     type="button"
                     key={category.title}
-                    onClick={() => setSelectedCategory(category.title)}
+                    onClick={() => {
+                      setSelectedCategory(category.title);
+                      onCategoryChange?.(category);
+                    }}
                     className={`flex w-full flex-col items-center gap-2 rounded-xl px-1 py-2 text-center transition ${
                       selected
                         ? "bg-[var(--primary)] text-white shadow-sm"
@@ -150,13 +161,15 @@ export default function ProductCollectionBottomSheet({
                     }`}
                   >
                     <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#F5F8F5] p-1">
-                      <Image
-                        src={category.images[0]}
-                        alt=""
-                        width={40}
-                        height={40}
-                        className="object-contain"
-                      />
+                      {category.images[0] ? (
+                        <Image
+                          src={category.images[0]}
+                          alt=""
+                          width={40}
+                          height={40}
+                          className="object-contain"
+                        />
+                      ) : null}
                     </span>
                     <span className="line-clamp-2 text-[10px] font-black leading-3">
                       {category.title}
@@ -171,15 +184,29 @@ export default function ProductCollectionBottomSheet({
             <h3 className="mb-4 text-base font-black text-[var(--text-primary)]">
               {selectedCategory}
             </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {selectedProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  variant="bestSellerPopup"
-                />
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex min-h-40 items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+              </div>
+            ) : error ? (
+              <p className="py-8 text-center text-xs font-semibold text-[var(--text-muted)]">
+                {error}
+              </p>
+            ) : selectedProducts.length === 0 ? (
+              <p className="py-8 text-center text-xs font-semibold text-[var(--text-muted)]">
+                No products are available in this category.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {selectedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    variant="bestSellerPopup"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

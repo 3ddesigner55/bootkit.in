@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import HomeProductCard from "@/components/product/HomeProductCard";
-import { useAdminProducts } from "@/hooks/useAdminProducts";
+import { getProducts } from "@/services/product.service";
+import { useEffect, useState } from "react";
 
 interface ProductSectionProps {
   title: string;
@@ -15,10 +16,20 @@ export default function ProductSection({
   categorySlug,
   limit = 6,
 }: ProductSectionProps) {
-  const {
-    activeProducts,
-    hydrated,
-  } = useAdminProducts();
+  const [activeProducts, setActiveProducts] = useState<any[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    void getProducts({ limit: 100 })
+      .then((res) => {
+        setActiveProducts(res.items);
+        setHydrated(true);
+      })
+      .catch(() => {
+        setActiveProducts([]);
+        setHydrated(true);
+      });
+  }, []);
 
   if (!hydrated) return null;
 

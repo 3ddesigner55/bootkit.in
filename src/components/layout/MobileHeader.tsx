@@ -9,7 +9,7 @@ import { useCart } from "@/hooks/useCart";
 import { useLocation } from "@/hooks/useLocation";
 import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useAdminCategories } from "@/hooks/useAdminCategories";
+import { getCategories } from "@/services/category.service";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
@@ -18,9 +18,27 @@ export default function MobileHeader() {
 
   const { location,hydrated: locationHydrated,openLocationModal,} = useLocation();
   const { unreadCount,hydrated: notificationsHydrated,} = useNotifications(); 
-  const { activeCategories, hydrated: categoriesHydrated } = useAdminCategories();
+  
+  const [activeCategories, setActiveCategories] = useState<any[]>([]);
+  const [categoriesHydrated, setCategoriesHydrated] = useState(false);
   const pathname = usePathname(); const [showDiscover, setShowDiscover] = useState(true); const lastScrollY = useRef(0);
+  
+  useEffect(() => {
+    if (pathname === "/") {
+      void getCategories()
+        .then((cats) => {
+          setActiveCategories(cats);
+          setCategoriesHydrated(true);
+        })
+        .catch(() => {
+          setActiveCategories([]);
+          setCategoriesHydrated(true);
+        });
+    }
+  }, [pathname]);
+
   useEffect(() => { const onScroll = () => { const current = window.scrollY; setShowDiscover(current < lastScrollY.current || current < 36); lastScrollY.current = current; }; window.addEventListener("scroll", onScroll, { passive: true }); return () => window.removeEventListener("scroll", onScroll); }, []);
+
     
    
   return (
