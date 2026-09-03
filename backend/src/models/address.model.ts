@@ -16,6 +16,8 @@ export type AddressDocument = {
   longitude?: number;
   deliveryInstructions: string;
   isDefault: boolean;
+  recipientType: 'MYSELF' | 'SOMEONE_ELSE';
+  googleMapsLink?: string;
   deletedAt?: Date | null;
   deletedBy?: Types.ObjectId;
 };
@@ -37,6 +39,42 @@ const addressSchema = new Schema<AddressDocument>(
     longitude: { type: Number },
     deliveryInstructions: { type: String, default: '', trim: true },
     isDefault: { type: Boolean, default: false },
+    recipientType: {
+      type: String,
+      enum: ['MYSELF', 'SOMEONE_ELSE'],
+      default: 'MYSELF',
+      required: true,
+    },
+    googleMapsLink: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v: string) {
+          if (!v) return true;
+          if (!v.startsWith('https://')) return false;
+          if (v.length > 1000) return false;
+          try {
+            const url = new URL(v);
+            const allowedHosts = [
+              'maps.google.com',
+              'google.com',
+              'www.google.com',
+              'goo.gl',
+              'maps.app.goo.gl'
+            ];
+            const isHostAllowed = allowedHosts.some(h =>
+              url.hostname === h || url.hostname.endsWith('.' + h)
+            );
+            if (!isHostAllowed) return false;
+            if (url.protocol !== 'https:') return false;
+            return true;
+          } catch (e) {
+            return false;
+          }
+        },
+        message: 'Invalid Google Maps link. Must be a secure HTTPS URL from Google Maps.',
+      },
+    },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },

@@ -27,6 +27,7 @@ export type UserDocument = {
   lastLoginAt?: Date | null;
   deletedAt?: Date | null;
   deletedBy?: Types.ObjectId;
+  customerCode?: string;
 };
 
 const userSchema = new Schema<UserDocument>(
@@ -70,6 +71,21 @@ const userSchema = new Schema<UserDocument>(
     lastLoginAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
     deletedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    customerCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      validate: {
+        validator: function(this: any, v: string) {
+          if (this && typeof this.isModified === 'function' && !this.isNew && this.isModified('customerCode')) {
+            return false;
+          }
+          return /^BK-\d{4,}$/.test(v);
+        },
+        message: 'Invalid customerCode format or attempt to modify an immutable path. Must match ^BK-\\d{4,}$'
+      },
+      immutable: true
+    },
   },
   { timestamps: true },
 );
@@ -78,6 +94,14 @@ userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ assignedStores: 1 });
+userSchema.index(
+  { customerCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { customerCode: { $exists: true, $type: 'string' } },
+    name: 'customerCode_unique_partial'
+  }
+);
 
 const User = models.User || model<UserDocument>('User', userSchema);
 

@@ -1,9 +1,130 @@
 "use client";
 
 import Link from "next/link";
-import { getCategories } from "@/services/category.service";
-import type { CustomerCategory } from "@/services/customerApi.types";
-import { ReactNode, useEffect, useState } from "react";
+import React, {
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  getHeaderNavigation,
+  type HeaderNavigationItem,
+} from "@/services/headerNavigation.service";
+
+const FALLBACK_HEADER_COLLECTIONS: HeaderNavigationItem[] = [
+  {
+    slug: "beauty",
+    label: "Beauty",
+    icon: "/icons/categories/Beauty.svg",
+    active: true,
+    sortOrder: 1,
+  },
+  {
+    slug: "electronics",
+    label: "Electronics",
+    icon: "/icons/categories/electronics.svg",
+    active: true,
+    sortOrder: 2,
+  },
+  {
+    slug: "pharmacy",
+    label: "Pharmacy",
+    icon: "/icons/categories/pharmacy.svg",
+    active: true,
+    sortOrder: 3,
+  },
+  {
+    slug: "decor",
+    label: "Decor",
+    icon: "/icons/categories/decor.svg",
+    active: true,
+    sortOrder: 4,
+  },
+  {
+    slug: "kids",
+    label: "Kids",
+    icon: "/icons/categories/kids.svg",
+    active: true,
+    sortOrder: 5,
+  },
+  {
+    slug: "gifting",
+    label: "Gifting",
+    icon: "/icons/categories/gifting.svg",
+    active: true,
+    sortOrder: 6,
+  },
+];
+
+const ALL_COLLECTION: HeaderNavigationItem = {
+  slug: "all",
+  label: "All",
+  icon: "/icons/categories/all.svg",
+  active: true,
+  sortOrder: 0,
+};
+
+interface CategoryChipProps {
+  active: boolean;
+  iconSrc: string;
+  label: string;
+  href?: string;
+  onClick?: () => void;
+}
+
+const CategoryChip = memo(function CategoryChip({
+  active,
+  iconSrc,
+  label,
+  href,
+  onClick,
+}: CategoryChipProps) {
+  const content = (
+    <>
+      <span
+        className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
+          active
+            ? "bg-[var(--primary)] text-white"
+            : "bg-transparent"
+        }`}
+      >
+        <img
+          src={iconSrc}
+          alt=""
+          loading="eager"
+          decoding="async"
+          className="h-7 w-7 object-contain"
+        />
+      </span>
+
+      <span className="line-clamp-1 text-[11px] font-semibold">
+        {label}
+      </span>
+    </>
+  );
+
+  const className = `flex w-[68px] shrink-0 flex-col items-center gap-1 transition ${
+    active
+      ? "text-[var(--primary)]"
+      : "text-[var(--text-primary)]"
+  }`;
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  );
+});
 
 export default function HomeCategories({
   selected = "all",
@@ -12,68 +133,29 @@ export default function HomeCategories({
   selected?: string;
   className?: string;
 } = {}) {
-  const [selectedCategory, setSelectedCategory] = useState(selected);
-  const [categories, setCategories] = useState<CustomerCategory[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [selectedCategory, setSelectedCategory] =
+    useState(selected);
+
+  const [headerItems, setHeaderItems] = useState<
+    HeaderNavigationItem[]
+  >(FALLBACK_HEADER_COLLECTIONS);
 
   useEffect(() => {
     setSelectedCategory(selected);
   }, [selected]);
-  const permanentCategories = [
-    {
-      slug: "all",
-      label: "All",
-      icon: "/icons/categories/all.svg",
-    },
-    {
-      slug: "beauty",
-      label: "Beauty",
-      icon: "/icons/categories/Beauty.svg",
-    },
-    {
-      slug: "electronics",
-      label: "Electronics",
-      icon: "/icons/categories/electronics.svg",
-    },
-    {
-      slug: "pharmacy",
-      label: "Pharmacy",
-      icon: "/icons/categories/pharmacy.svg",
-    },
-    {
-      slug: "decor",
-      label: "Decor",
-      icon: "/icons/categories/decor.svg",
-    },
-    {
-      slug: "kids",
-      label: "Kids",
-      icon: "/icons/categories/kids.svg",
-    },
-    {
-      slug: "gifting",
-      label: "Gifting",
-      icon: "/icons/categories/gifting.svg",
-    },
-  ];
 
   useEffect(() => {
     let cancelled = false;
 
-    void getCategories()
-      .then((nextCategories) => {
-        if (!cancelled) {
-          setCategories(nextCategories);
+    void getHeaderNavigation()
+      .then((items) => {
+        if (!cancelled && Array.isArray(items) && items.length > 0) {
+          setHeaderItems(items);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setCategories([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setHydrated(true);
+          setHeaderItems(FALLBACK_HEADER_COLLECTIONS);
         }
       });
 
@@ -82,30 +164,30 @@ export default function HomeCategories({
     };
   }, []);
 
-  if (!hydrated) return null;
+  const visibleCollections = useMemo(
+    () => [
+      ALL_COLLECTION,
+      ...headerItems
+        .filter((item) => item.active)
+        .sort((first, second) => first.sortOrder - second.sortOrder),
+    ],
+    [headerItems],
+  );
 
   return (
     <div
-      className={`sticky top-[72px] z-30 -mx-4 bg-transparent px-4 pt-2 pb-3 backdrop-blur-md ${className}`}
+      className={`sticky top-[72px] z-30 -mx-4 bg-transparent px-4 pb-3 pt-2 backdrop-blur-md ${className}`}
     >
-      {/* Left Fade */}
       <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-6 bg-gradient-to-l from-transparent to-transparent" />
 
-      {/* Right Fade */}
       <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-6 bg-gradient-to-l from-transparent to-transparent" />
 
       <div className="flex gap-3 overflow-x-auto scroll-smooth scrollbar-hide">
-        {permanentCategories.map((category) => (
+        {visibleCollections.map((category) => (
           <CategoryChip
             key={category.slug}
             active={selectedCategory === category.slug}
-            icon={
-              <img
-                src={category.icon}
-                alt=""
-                className="h-7 w-7 object-contain"
-              />
-            }
+            iconSrc={category.icon}
             label={category.label}
             href={
               category.slug === "all"
@@ -123,51 +205,5 @@ export default function HomeCategories({
         ))}
       </div>
     </div>
-  );
-}
-
-function CategoryChip({
-  active,
-  icon,
-  label,
-  href,
-  onClick,
-}: {
-  active: boolean;
-  icon: ReactNode;
-  label: string;
-  href?: string;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <span
-        className={`flex h-12 w-12 items-center justify-center rounded-full transition ${
-          active ? "bg-[var(--primary)] text-white" : "bg-transparent"
-        }`}
-      >
-        {icon}
-      </span>
-
-      <span className="line-clamp-1 text-[11px] font-semibold">{label}</span>
-    </>
-  );
-
-  const className = `flex w-[68px] shrink-0 flex-col items-center gap-1 transition ${
-    active ? "text-[var(--primary)]" : "text-[var(--text-primary)]"
-  }`;
-
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button onClick={onClick} className={className}>
-      {content}
-    </button>
   );
 }

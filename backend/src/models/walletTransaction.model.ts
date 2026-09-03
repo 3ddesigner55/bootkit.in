@@ -1,5 +1,18 @@
 import { model, models, Schema, type Types } from 'mongoose';
 
+export const TRANSACTION_TYPES = {
+  PROMOTIONAL_CREDIT: 'PROMOTIONAL_CREDIT',
+  CASHBACK_CREDIT: 'CASHBACK_CREDIT',
+  REFUND_CREDIT: 'REFUND_CREDIT',
+  ORDER_DEBIT: 'ORDER_DEBIT',
+  CREDIT_REVERSAL: 'CREDIT_REVERSAL',
+  DEBIT_REVERSAL: 'DEBIT_REVERSAL',
+  EXPIRY_DEBIT: 'EXPIRY_DEBIT',
+  ADMIN_CORRECTION: 'ADMIN_CORRECTION',
+} as const;
+
+export const TRANSACTION_TYPES_LIST = Object.values(TRANSACTION_TYPES);
+
 export type WalletTransactionDocument = {
   customer: Types.ObjectId;
   wallet: Types.ObjectId;
@@ -16,6 +29,10 @@ export type WalletTransactionDocument = {
   balanceBefore: number;
   balanceAfter: number;
   expiryDate?: Date | null;
+  isReversed?: boolean;
+  reversedAt?: Date | null;
+  reversalOf?: Types.ObjectId | string | null;
+  requestFingerprint?: string | null;
   createdAt: Date;
 };
 
@@ -26,15 +43,7 @@ const walletTransactionSchema = new Schema<WalletTransactionDocument>(
     direction: { type: String, enum: ['CREDIT', 'DEBIT'], required: true },
     transactionType: {
       type: String,
-      enum: [
-        'PROMOTIONAL_CREDIT',
-        'CASHBACK_CREDIT',
-        'REFUND_CREDIT',
-        'ORDER_DEBIT',
-        'CREDIT_REVERSAL',
-        'EXPIRY_DEBIT',
-        'ADMIN_CORRECTION',
-      ],
+      enum: TRANSACTION_TYPES_LIST,
       required: true,
     },
     amount: { type: Number, required: true, min: 1 },
@@ -48,12 +57,24 @@ const walletTransactionSchema = new Schema<WalletTransactionDocument>(
     balanceBefore: { type: Number, required: true, min: 0 },
     balanceAfter: { type: Number, required: true, min: 0 },
     expiryDate: { type: Date, default: null },
+    isReversed: { type: Boolean, default: false },
+    reversedAt: { type: Date, default: null },
+    reversalOf: { type: Schema.Types.ObjectId, ref: 'WalletTransaction', index: true },
+    requestFingerprint: { type: String, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
 
 walletTransactionSchema.index({ idempotencyKey: 1 }, { unique: true });
 walletTransactionSchema.index({ customer: 1, createdAt: -1 });
+walletTransactionSchema.index(
+  { reversalOf: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { reversalOf: { $exists: true, $type: 'objectId' } },
+    name: 'reversalOf_unique_partial'
+  }
+);
 
 const WalletTransaction =
   models.WalletTransaction ||

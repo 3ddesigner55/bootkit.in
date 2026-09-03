@@ -96,54 +96,108 @@ function appendQuery(path: string, params: Record<string, string | undefined>) {
   return queryString ? `${path}?${queryString}` : path;
 }
 
+const homeDataCache = new Map<string, { data: CustomerHomeData; timestamp: number }>();
+const pendingHomeRequests = new Map<string, Promise<CustomerHomeData>>();
+const HOME_CACHE_TTL_MS = 60 * 1000; // 60s cache
+
+export function getCachedCustomerHomeData(
+  storeId?: string,
+  city?: string,
+): CustomerHomeData | null {
+  const key = `${storeId || ""}:${city || ""}`;
+  const entry = homeDataCache.get(key);
+  if (entry && Date.now() - entry.timestamp < HOME_CACHE_TTL_MS) {
+    return entry.data;
+  }
+  return null;
+}
+
 export async function getCustomerHomeData(
   storeId?: string,
   city?: string
 ): Promise<CustomerHomeData> {
-  const data = asRecord(
-    await request<unknown>(
-      appendQuery("/home", {
-        storeId,
-        city,
-      })
-    ),
-    "Home"
-  );
+  const key = `${storeId || ""}:${city || ""}`;
+  const cached = getCachedCustomerHomeData(storeId, city);
 
-  const mapProducts = (key: string) =>
-    asArray(data[key], `Home ${key}`).map(toCustomerProduct);
-  const mapCategories = (key: string) =>
-    asArray(data[key], `Home ${key}`).map(toCustomerCategory);
+  if (cached) {
+    if (!pendingHomeRequests.has(key)) {
+      void fetchCustomerHomeData(storeId, city, key).catch(() => {});
+    }
+    return cached;
+  }
 
-  return {
-    resolvedStoreId: typeof data.resolvedStoreId === "string" ? data.resolvedStoreId : null,
-    config: data.config ? (data.config as any) : null,
-    heroBanners: asArray(data.heroBanners, "Home heroBanners").map(
-      toCustomerHeroBanner
-    ),
-    bestSellers: asArray(data.bestSellers, "Home bestSellers").map(
-      toCustomerBestSellerItem
-    ),
-    groceryKitchen: mapCategories("groceryKitchen"),
-    householdEssentials: mapCategories("householdEssentials"),
+  if (pendingHomeRequests.has(key)) {
+    return pendingHomeRequests.get(key)!;
+  }
 
-    sweetTooth: mapProducts("sweetTooth"),
-    featuredThisWeek: asArray(data.featuredThisWeek, "Home featuredThisWeek").map(
-      toCustomerHeroBanner
-    ),
-    snacksDrinks: mapCategories("snacksDrinks"),
-    beautyPersonalCare: mapCategories("beautyPersonalCare"),
-    storeSpotlight: asArray(data.storeSpotlight, "Home storeSpotlight").map(
-      toCustomerStore
-    ),
-  };
+  return fetchCustomerHomeData(storeId, city, key);
+}
+
+async function fetchCustomerHomeData(
+  storeId?: string,
+  city?: string,
+  key?: string,
+): Promise<CustomerHomeData> {
+  const cacheKey = key || `${storeId || ""}:${city || ""}`;
+  const reqPromise = (async () => {
+    try {
+      const data = asRecord(
+        await request<unknown>(
+          appendQuery("/home", {
+            storeId,
+            city,
+          })
+        ),
+        "Home"
+      );
+
+      const mapProducts = (k: string) =>
+        asArray(data[k], `Home ${k}`).map(toCustomerProduct);
+      const mapCategories = (k: string) =>
+        asArray(data[k], `Home ${k}`).map(toCustomerCategory);
+
+      const result: CustomerHomeData = {
+        resolvedStoreId: typeof data.resolvedStoreId === "string" ? data.resolvedStoreId : null,
+        config: data.config ? (data.config as any) : null,
+        heroBanners: asArray(data.heroBanners, "Home heroBanners").map(
+          toCustomerHeroBanner
+        ),
+        bestSellers: asArray(data.bestSellers, "Home bestSellers").map(
+          toCustomerBestSellerItem
+        ),
+        groceryKitchen: mapCategories("groceryKitchen"),
+        householdEssentials: mapCategories("householdEssentials"),
+        sweetTooth: mapProducts("sweetTooth"),
+        featuredThisWeek: asArray(data.featuredThisWeek, "Home featuredThisWeek").map(
+          toCustomerHeroBanner
+        ),
+        snacksDrinks: mapCategories("snacksDrinks"),
+        beautyPersonalCare: mapCategories("beautyPersonalCare"),
+        storeSpotlight: asArray(data.storeSpotlight, "Home storeSpotlight").map(
+          toCustomerStore
+        ),
+      };
+
+      homeDataCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      return result;
+    } finally {
+      pendingHomeRequests.delete(cacheKey);
+    }
+  })();
+
+  pendingHomeRequests.set(cacheKey, reqPromise);
+  return reqPromise;
 }
 
 
-export async function getCustomerHeroBanners(): Promise<CustomerHeroBanner[]> {
+export async function getCustomerHeroBanners(
+  hub?: string,
+): Promise<CustomerHeroBanner[]> {
   return asArray(
-    await request<unknown>("/hero-banners"),
-    "Hero banners"
+    await request<unknown>(
+      appendQuery("/hero-banners", { hub }),
+    ),
+    "Hero banners",
   ).map(toCustomerHeroBanner);
 }
 
@@ -164,6 +218,7 @@ export async function getCustomerCatalogProducts(
         minPrice: params.minPrice?.toString(),
         maxPrice: params.maxPrice?.toString(),
         sort: params.sort,
+        hub: params.hub,
       })
     ),
     "Catalog"
@@ -204,10 +259,17 @@ export async function getCustomerCategories(): Promise<CustomerCategory[]> {
   );
 }
 
-export async function getCustomerBrands(): Promise<CustomerBrand[]> {
-  return asArray(await request<unknown>("/brands"), "Brands").map(
-    toCustomerBrand
-  );
+export async function getCustomerBrands(
+  hub?: string,
+): Promise<CustomerBrand[]> {
+  return asArray(
+    await request<unknown>(
+      appendQuery("/brands", {
+        hub,
+      }),
+    ),
+    "Brands",
+  ).map(toCustomerBrand);
 }
 
 export async function getCustomerStores(

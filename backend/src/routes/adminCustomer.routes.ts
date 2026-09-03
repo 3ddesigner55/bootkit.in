@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import { ROLES } from '../constants/roles';
 import {
   getAdminCustomerAddressesController,
@@ -14,7 +15,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { HTTP_STATUS } from '../constants/httpStatus';
 import User from '../models/user.model';
 import Wallet from '../models/wallet.model';
-import WalletTransaction from '../models/walletTransaction.model';
+import WalletTransaction, { TRANSACTION_TYPES, TRANSACTION_TYPES_LIST } from '../models/walletTransaction.model';
 import CatalogAudit from '../models/catalogAudit.model';
 import Order from '../models/order.model';
 import Refund from '../models/refund.model';
@@ -26,6 +27,27 @@ import {
 } from '../validators/adminCustomer.validator';
 
 export const adminCustomerRoutes = Router();
+
+export function generateFingerprint(data: {
+  operation: string;
+  customer: string;
+  amount: number;
+  direction: string;
+  type: string;
+  reason: string;
+  referenceId?: string | null;
+}): string {
+  const payload = JSON.stringify({
+    operation: data.operation,
+    customer: data.customer,
+    amount: data.amount,
+    direction: data.direction,
+    type: data.type,
+    reason: (data.reason || '').trim(),
+    referenceId: data.referenceId || null,
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
 
 adminCustomerRoutes.use(authenticate, authorizeRoles(ROLES.ADMIN, ROLES.OWNER));
 
@@ -105,7 +127,7 @@ adminCustomerRoutes.get('/:id/wallet/transactions', asyncHandler(async (req: Req
 }));
 
 adminCustomerRoutes.post('/:id/wallet/credits', asyncHandler(async (req: Request, res: Response) => {
-  const { amount, direction, transactionType, reason } = req.body;
+  const { amount, direction, transactionType, reason, idempotencyKey } = req.body;
   if (!amount || amount <= 0 || !Number.isInteger(amount)) {
     res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Amount must be a positive integer in paise.' });
     return;
@@ -115,10 +137,71 @@ adminCustomerRoutes.post('/:id/wallet/credits', asyncHandler(async (req: Request
     return;
   }
 
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key is required and must be a non-empty string.' });
+    return;
+  }
+  const trimmedKey = idempotencyKey.trim();
+  if (trimmedKey.length > 100) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key must not exceed 100 characters.' });
+    return;
+  }
+
+  if (reason !== undefined) {
+    if (typeof reason !== 'string') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Reason must be a string.' });
+      return;
+    }
+    if (reason.trim().length > 500) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Reason must not exceed 500 characters.' });
+      return;
+    }
+  }
+
+  if (transactionType && !TRANSACTION_TYPES_LIST.includes(transactionType)) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Invalid transaction type.' });
+    return;
+  }
+
+  if (transactionType) {
+    if ([TRANSACTION_TYPES.PROMOTIONAL_CREDIT, TRANSACTION_TYPES.CASHBACK_CREDIT, TRANSACTION_TYPES.REFUND_CREDIT, TRANSACTION_TYPES.DEBIT_REVERSAL].includes(transactionType as any) && direction !== 'CREDIT') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Transaction type must match direction CREDIT.' });
+      return;
+    }
+    if ([TRANSACTION_TYPES.ORDER_DEBIT, TRANSACTION_TYPES.EXPIRY_DEBIT, TRANSACTION_TYPES.CREDIT_REVERSAL].includes(transactionType as any) && direction !== 'DEBIT') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Transaction type must match direction DEBIT.' });
+      return;
+    }
+  }
+
+  const finalType = transactionType || (direction === 'CREDIT' ? TRANSACTION_TYPES.PROMOTIONAL_CREDIT : TRANSACTION_TYPES.ADMIN_CORRECTION);
+  const currentFingerprint = generateFingerprint({
+    operation: 'credit',
+    customer: req.params.id as string,
+    amount,
+    direction: direction as string,
+    type: finalType as string,
+    reason: (reason as string) || 'Admin wallet adjustment',
+  });
+
   const session = await mongoose.startSession();
   try {
     let resultTx;
+    let isConflict = false;
+    let isDuplicate = false;
     await session.withTransaction(async () => {
+      const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey }).session(session);
+      if (existingTx) {
+        if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+          isDuplicate = true;
+          resultTx = existingTx;
+          return;
+        } else {
+          isConflict = true;
+          return;
+        }
+      }
+
       let wallet = await Wallet.findOne({ customer: req.params.id }).session(session);
       if (!wallet) {
         wallet = await Wallet.create([{ customer: req.params.id, balance: 0 }], { session }).then(res => res[0]);
@@ -140,12 +223,13 @@ adminCustomerRoutes.post('/:id/wallet/credits', asyncHandler(async (req: Request
         customer: req.params.id,
         wallet: wallet._id,
         direction,
-        transactionType: transactionType || 'ADMIN_ADJUSTMENT',
+        transactionType: finalType,
         amount,
-        idempotencyKey: `wallet-credit-${req.params.id}-${Date.now()}`,
+        idempotencyKey: trimmedKey,
         adminReason: reason || 'Admin wallet adjustment',
         balanceBefore,
         balanceAfter: wallet.balance,
+        requestFingerprint: currentFingerprint,
       }], { session }).then(res => res[0]);
 
       // Audit trail
@@ -162,8 +246,29 @@ adminCustomerRoutes.post('/:id/wallet/credits', asyncHandler(async (req: Request
       resultTx = tx;
     });
 
+    if (isConflict) {
+      res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+      return;
+    }
+    if (isDuplicate) {
+      res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
+      return;
+    }
+
     res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
   } catch (err: any) {
+    if (err.code === 11000 && (err.message.includes('idempotencyKey') || JSON.stringify(err).includes('idempotencyKey'))) {
+      const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey });
+      if (existingTx) {
+        if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+          res.status(HTTP_STATUS.OK).json({ success: true, transaction: existingTx });
+          return;
+        } else {
+          res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+          return;
+        }
+      }
+    }
     res.status(HTTP_STATUS.BAD_REQUEST).json({ message: err.message });
   } finally {
     await session.endSession();
@@ -171,51 +276,111 @@ adminCustomerRoutes.post('/:id/wallet/credits', asyncHandler(async (req: Request
 }));
 
 adminCustomerRoutes.post('/:id/wallet/transactions/:transactionId/reverse', asyncHandler(async (req: Request, res: Response) => {
+  const { idempotencyKey } = req.body;
+
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key is required and must be a non-empty string.' });
+    return;
+  }
+  const trimmedKey = idempotencyKey.trim();
+  if (trimmedKey.length > 100) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key must not exceed 100 characters.' });
+    return;
+  }
+
+  const origTx = await WalletTransaction.findById(req.params.transactionId);
+  if (!origTx) {
+    res.status(HTTP_STATUS.NOT_FOUND).json({ message: 'Original transaction not found.' });
+    return;
+  }
+
+  const reverseDirection = origTx.direction === 'CREDIT' ? 'DEBIT' : 'CREDIT';
+  const reverseType = origTx.direction === 'CREDIT' ? TRANSACTION_TYPES.CREDIT_REVERSAL : TRANSACTION_TYPES.DEBIT_REVERSAL;
+  const currentFingerprint = generateFingerprint({
+    operation: 'reversal',
+    customer: origTx.customer.toString(),
+    amount: origTx.amount,
+    direction: reverseDirection,
+    type: reverseType,
+    reason: `Reversal of transaction #${req.params.transactionId}`,
+    referenceId: origTx._id.toString(),
+  });
+
   const session = await mongoose.startSession();
   try {
     let resultTx;
+    let isConflict = false;
+    let isDuplicate = false;
     await session.withTransaction(async () => {
-      const origTx = await WalletTransaction.findById(req.params.transactionId).session(session);
-      if (!origTx) {
+      const origTxSession = await WalletTransaction.findById(req.params.transactionId).session(session);
+      if (!origTxSession) {
         throw new Error('Original transaction not found.');
       }
-      if (origTx.isReversed) {
+
+      if (origTxSession.customer.toString() !== req.params.id) {
+        throw new Error('Transaction customer mismatch.');
+      }
+
+      if (origTxSession.reversalOf || [TRANSACTION_TYPES.CREDIT_REVERSAL, TRANSACTION_TYPES.DEBIT_REVERSAL].includes(origTxSession.transactionType as any)) {
+        throw new Error('Cannot reverse a reversal transaction.');
+      }
+
+      const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey }).session(session);
+      if (existingTx) {
+        if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+          isDuplicate = true;
+          resultTx = existingTx;
+          return;
+        } else {
+          isConflict = true;
+          return;
+        }
+      }
+
+      if (origTxSession.isReversed) {
         throw new Error('Transaction is already reversed.');
       }
 
-      let wallet = await Wallet.findById(origTx.wallet).session(session);
+      const alreadyReversed = await WalletTransaction.findOne({ reversalOf: origTxSession._id }).session(session);
+      if (alreadyReversed) {
+        throw new Error('Transaction is already reversed.');
+      }
+
+      let wallet = await Wallet.findById(origTxSession.wallet).session(session);
       if (!wallet) {
         throw new Error('Wallet not found.');
       }
 
       const balanceBefore = wallet.balance;
-      const reverseDirection = origTx.direction === 'CREDIT' ? 'DEBIT' : 'CREDIT';
 
       if (reverseDirection === 'DEBIT') {
-        if (wallet.balance < origTx.amount) {
+        if (wallet.balance < origTxSession.amount) {
           throw new Error('Insufficient balance to reverse credit transaction.');
         }
-        wallet.balance -= origTx.amount;
+        wallet.balance -= origTxSession.amount;
       } else {
-        wallet.balance += origTx.amount;
+        wallet.balance += origTxSession.amount;
       }
 
       await wallet.save({ session });
 
-      origTx.isReversed = true;
-      origTx.reversedAt = new Date();
-      await origTx.save({ session });
+      origTxSession.isReversed = true;
+      origTxSession.reversedAt = new Date();
+      await origTxSession.save({ session });
 
       const tx = await WalletTransaction.create([{
-        customer: origTx.customer,
+        customer: origTxSession.customer,
         wallet: wallet._id,
         direction: reverseDirection,
-        transactionType: 'REVERSAL',
-        amount: origTx.amount,
-        idempotencyKey: `wallet-reverse-${req.params.transactionId}-${Date.now()}`,
+        transactionType: reverseType,
+        amount: origTxSession.amount,
+        idempotencyKey: trimmedKey,
         adminReason: `Reversal of transaction #${req.params.transactionId}`,
+        actor: req.user!.id,
         balanceBefore,
         balanceAfter: wallet.balance,
+        reversalOf: origTxSession._id,
+        requestFingerprint: currentFingerprint,
       }], { session }).then(res => res[0]);
 
       // Audit trail
@@ -224,7 +389,7 @@ adminCustomerRoutes.post('/:id/wallet/transactions/:transactionId/reverse', asyn
         role: req.user!.role,
         action: 'WALLET_REVERSAL',
         entityType: 'CUSTOMER',
-        entityId: origTx.customer,
+        entityId: origTxSession.customer,
         reason: `Reversal of transaction #${req.params.transactionId}`,
         afterValue: tx,
       }], { session });
@@ -232,8 +397,36 @@ adminCustomerRoutes.post('/:id/wallet/transactions/:transactionId/reverse', asyn
       resultTx = tx;
     });
 
+    if (isConflict) {
+      res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+      return;
+    }
+    if (isDuplicate) {
+      res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
+      return;
+    }
+
     res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
   } catch (err: any) {
+    if (err.code === 11000) {
+      const errMsg = err.message || JSON.stringify(err);
+      if (errMsg.includes('reversalOf')) {
+        res.status(409).json({ message: 'Transaction is already reversed.' });
+        return;
+      }
+      if (errMsg.includes('idempotencyKey')) {
+        const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey });
+        if (existingTx) {
+          if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+            res.status(HTTP_STATUS.OK).json({ success: true, transaction: existingTx });
+            return;
+          } else {
+            res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+            return;
+          }
+        }
+      }
+    }
     res.status(HTTP_STATUS.BAD_REQUEST).json({ message: err.message });
   } finally {
     await session.endSession();
@@ -361,10 +554,87 @@ adminCustomerRoutes.post('/:id/wallet/adjustments', asyncHandler(async (req: Req
   }
   const amountPaise = Number.isInteger(amount) ? amount : Math.round(amount * 100);
 
+  if (!['CREDIT', 'DEBIT'].includes(direction)) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Invalid transaction direction.' });
+    return;
+  }
+
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key is required and must be a non-empty string.' });
+    return;
+  }
+  const trimmedKey = idempotencyKey.trim();
+  if (trimmedKey.length > 100) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Idempotency key must not exceed 100 characters.' });
+    return;
+  }
+
+  if (reason !== undefined) {
+    if (typeof reason !== 'string') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Reason must be a string.' });
+      return;
+    }
+    if (reason.trim().length > 500) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Reason must not exceed 500 characters.' });
+      return;
+    }
+  }
+
+  if (note !== undefined) {
+    if (typeof note !== 'string') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Note must be a string.' });
+      return;
+    }
+    if (note.trim().length > 500) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Note must not exceed 500 characters.' });
+      return;
+    }
+  }
+
+  if (transactionType && !TRANSACTION_TYPES_LIST.includes(transactionType)) {
+    res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Invalid transaction type.' });
+    return;
+  }
+
+  if (transactionType) {
+    if ([TRANSACTION_TYPES.PROMOTIONAL_CREDIT, TRANSACTION_TYPES.CASHBACK_CREDIT, TRANSACTION_TYPES.REFUND_CREDIT, TRANSACTION_TYPES.DEBIT_REVERSAL].includes(transactionType as any) && direction !== 'CREDIT') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Transaction type must match direction CREDIT.' });
+      return;
+    }
+    if ([TRANSACTION_TYPES.ORDER_DEBIT, TRANSACTION_TYPES.EXPIRY_DEBIT, TRANSACTION_TYPES.CREDIT_REVERSAL].includes(transactionType as any) && direction !== 'DEBIT') {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ message: 'Transaction type must match direction DEBIT.' });
+      return;
+    }
+  }
+
+  const finalType = transactionType || (direction === 'CREDIT' ? TRANSACTION_TYPES.PROMOTIONAL_CREDIT : TRANSACTION_TYPES.ADMIN_CORRECTION);
+  const currentFingerprint = generateFingerprint({
+    operation: 'adjustment',
+    customer: req.params.id as string,
+    amount: amountPaise,
+    direction: direction as string,
+    type: finalType as string,
+    reason: (reason as string) || (note as string) || 'Admin wallet adjustment',
+  });
+
   const session = await mongoose.startSession();
   try {
     let resultTx;
+    let isConflict = false;
+    let isDuplicate = false;
     await session.withTransaction(async () => {
+      const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey }).session(session);
+      if (existingTx) {
+        if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+          isDuplicate = true;
+          resultTx = existingTx;
+          return;
+        } else {
+          isConflict = true;
+          return;
+        }
+      }
+
       let wallet = await Wallet.findOne({ customer: req.params.id }).session(session);
       if (!wallet) {
         wallet = await Wallet.create([{ customer: req.params.id, balance: 0 }], { session }).then(res => res[0]);
@@ -386,13 +656,14 @@ adminCustomerRoutes.post('/:id/wallet/adjustments', asyncHandler(async (req: Req
         customer: req.params.id,
         wallet: wallet._id,
         direction,
-        transactionType: transactionType || (direction === 'CREDIT' ? 'PROMOTIONAL_CREDIT' : 'ADMIN_CORRECTION'),
+        transactionType: finalType,
         amount: amountPaise,
-        idempotencyKey: idempotencyKey || `wallet-adj-${req.params.id}-${Date.now()}`,
+        idempotencyKey: trimmedKey,
         adminReason: reason || note || 'Admin wallet adjustment',
         actor: req.user!.id,
         balanceBefore,
         balanceAfter: wallet.balance,
+        requestFingerprint: currentFingerprint,
       }], { session }).then(res => res[0]);
 
       await CatalogAudit.create([{
@@ -408,8 +679,29 @@ adminCustomerRoutes.post('/:id/wallet/adjustments', asyncHandler(async (req: Req
       resultTx = tx;
     });
 
+    if (isConflict) {
+      res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+      return;
+    }
+    if (isDuplicate) {
+      res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
+      return;
+    }
+
     res.status(HTTP_STATUS.OK).json({ success: true, transaction: resultTx });
   } catch (err: any) {
+    if (err.code === 11000 && (err.message.includes('idempotencyKey') || JSON.stringify(err).includes('idempotencyKey'))) {
+      const existingTx = await WalletTransaction.findOne({ idempotencyKey: trimmedKey });
+      if (existingTx) {
+        if (existingTx.requestFingerprint && existingTx.requestFingerprint === currentFingerprint) {
+          res.status(HTTP_STATUS.OK).json({ success: true, transaction: existingTx });
+          return;
+        } else {
+          res.status(409).json({ message: 'Idempotency conflict: A different request was already processed with this key.' });
+          return;
+        }
+      }
+    }
     res.status(HTTP_STATUS.BAD_REQUEST).json({ message: err.message });
   } finally {
     await session.endSession();

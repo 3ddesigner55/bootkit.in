@@ -81,7 +81,10 @@ useEffect(() => {
   "/select-location",
   "/confirm-location",
   "/unserviceable-area",
-].includes(pathname);
+].includes(pathname) ||
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/owner") ||
+    pathname.startsWith("/seller");
 
   if (dedicatedLocationFlow) {
     setModalOpen(false);

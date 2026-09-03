@@ -20,9 +20,16 @@ export async function connectDatabase(): Promise<void> {
     );
   }
 
+  // Configure database connection so autoIndex is false by default.
+  // Permit autoIndex only through an explicit non-production test environment flag.
+  // Never allow automatic index creation in production.
+  const allowAutoIndex = process.env.ALLOW_AUTO_INDEX === 'true' && process.env.NODE_ENV !== 'production';
+  mongoose.set('autoIndex', allowAutoIndex);
+
   connectionPromise = mongoose
     .connect(mongoUri, {
       dbName: databaseName,
+      autoIndex: allowAutoIndex,
     })
     .then(() => {
       console.info('MongoDB connected');

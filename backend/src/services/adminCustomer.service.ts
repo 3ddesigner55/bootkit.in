@@ -25,9 +25,11 @@ type CustomerListItem = CustomerSummary & {
   phone: string;
   avatar: string;
   isActive: boolean;
+  status: 'ACTIVE' | 'BLOCKED' | 'SUSPENDED';
   isVerified: boolean;
   createdAt: Date;
   updatedAt: Date;
+  customerCode?: string;
 };
 
 type CustomerDetail = CustomerListItem;
@@ -145,9 +147,11 @@ function customerProjection() {
       phone: 1,
       avatar: 1,
       isActive: 1,
+      status: 1,
       isVerified: 1,
       createdAt: 1,
       updatedAt: 1,
+      customerCode: 1,
       orderCount: { $ifNull: ['$orderSummary.orderCount', 0] },
       totalSpend: { $ifNull: ['$orderSummary.totalSpend', 0] },
       latestOrderDate: { $ifNull: ['$orderSummary.latestOrderDate', null] },
@@ -158,15 +162,18 @@ function customerProjection() {
 function serializeCustomer(customer: CustomerListItem) {
   return {
     id: customer._id.toString(),
+    _id: customer._id.toString(),
+    customerCode: customer.customerCode || 'ID Pending',
     firstName: customer.firstName,
     lastName: customer.lastName,
     email: customer.email,
     phone: customer.phone,
     avatar: customer.avatar,
     isActive: customer.isActive,
-    status: customer.isActive ? 'Active' : 'Blocked',
+    status: customer.status || (customer.isActive ? 'ACTIVE' : 'BLOCKED'),
     isVerified: customer.isVerified,
     registeredAt: customer.createdAt,
+    createdAt: customer.createdAt,
     updatedAt: customer.updatedAt,
     orderCount: customer.orderCount,
     totalSpend: customer.totalSpend,

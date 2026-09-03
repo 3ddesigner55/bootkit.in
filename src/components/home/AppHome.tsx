@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import ProductDrawer from "@/components/product/ProductDrawer";
 import { searchProducts } from "@/services/search.service";
-import { getHome } from "@/services/home.service";
+import { getHome, getCachedCustomerHomeData } from "@/services/home.service";
 import { useLocation } from "@/hooks/useLocation";
 import type {
   CustomerBestSellerItem,
@@ -55,23 +55,21 @@ export default function AppHome() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [homeData, setHomeData] =
-  useState<CustomerHomeData | null | undefined>(
-    undefined,
-  );
+  const [homeData, setHomeData] = useState<CustomerHomeData | null>(() => {
+    return getCachedCustomerHomeData(undefined, location?.city);
+  });
 
   // Monotonic request counter for stale-response protection
   const latestRequestId = useRef(0);
 
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
-
-    setHomeData(undefined);
-
-const currentRequestId = ++latestRequestId.current;
+    const currentRequestId = ++latestRequestId.current;
     let cancelled = false;
+
+    const cached = getCachedCustomerHomeData(undefined, location?.city);
+    if (cached && !homeData) {
+      setHomeData(cached);
+    }
 
     getHome(undefined, location?.city)    
       .then((data) => {
@@ -83,19 +81,18 @@ const currentRequestId = ++latestRequestId.current;
         }
       })
       .catch((err) => {
-  if (
-    !cancelled &&
-    currentRequestId === latestRequestId.current
-  ) {
-    console.error("Error fetching home data:", err);
-    setHomeData(null);
-  }
-});
+        if (
+          !cancelled &&
+          currentRequestId === latestRequestId.current
+        ) {
+          console.error("Error fetching home data:", err);
+        }
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [location?.city, hydrated, setResolvedStoreId]);
+  }, [location?.city, setResolvedStoreId]);
 
 
 
@@ -156,18 +153,20 @@ const currentRequestId = ++latestRequestId.current;
           <HomeCategories />
         </div>
 
-       {homeData === undefined ? null : homeData?.config ? (
-  <HomeDynamicRenderer
-    config={homeData.config}
-    legacyData={homeData}
-  />
-) : homeData ? (
-  <DefaultHomeFallback
-    bestSellerCategories={toBestSellerCategories(
-      homeData.bestSellers,
-    )}
-  />
-) : null}
+        {homeData?.config ? (
+          <HomeDynamicRenderer
+            config={homeData.config}
+            legacyData={homeData}
+          />
+        ) : homeData ? (
+          <DefaultHomeFallback
+            bestSellerCategories={toBestSellerCategories(
+              homeData.bestSellers,
+            )}
+          />
+        ) : (
+          <DefaultHomeFallback />
+        )}
       </main>
 
       <ProductDrawer

@@ -620,23 +620,68 @@ export default function AdminHomeBuilderClient() {
 
   const handleAddSection = (type: SectionType) => {
     if (!draftConfig) return;
-    const isCategory = type === "category_grid";
-    const isProduct = type === "product_grid";
+
+    let itemMode: "MANUAL" | "BEST_SELLING" | "CATEGORY" | "RECENT" = "MANUAL";
+    let layoutKey: string | null = null;
+    let selectionMode: string | null = null;
+    let rowCount: number | null = null;
+
+    const isCategoryGridType = [
+      "category_grid",
+      "category_cards",
+      "grocery_kitchen",
+      "household_essentials",
+      "snacks_drinks",
+      "beauty_personal_care",
+    ].includes(type);
+
+    const isProductGridType = [
+      "product_grid",
+      "sweet_tooth",
+      "dry_food_masala",
+    ].includes(type);
+
+    if (isCategoryGridType) {
+      itemMode = "CATEGORY";
+      layoutKey = "CATEGORY_GRID_4";
+      selectionMode = "AUTOMATIC";
+      rowCount = 1;
+    } else if (isProductGridType) {
+      itemMode = "CATEGORY";
+      layoutKey = "PRODUCT_GRID_3X2";
+      selectionMode = "AUTOMATIC";
+      rowCount = 2;
+    } else if (type === "best_sellers" || type === "best_seller_grid") {
+      itemMode = "BEST_SELLING";
+      layoutKey = "BEST_SELLERS_3X2";
+      selectionMode = "AUTOMATIC";
+      rowCount = 2;
+    } else {
+      itemMode = "MANUAL";
+      layoutKey = null;
+      selectionMode = "MANUAL";
+      rowCount = null;
+    }
+
+    let suffix = 1;
+    while (draftConfig.sections.some((s) => s.sectionId === `${type}_${suffix}`)) {
+      suffix++;
+    }
+    const sectionId = `${type}_${suffix}`;
 
     const newSection: ConfigSection = {
-      sectionId: `${type}_${draftConfig.sections.length + 1}`,
+      sectionId,
       type,
-
       active: true,
       sortOrder: draftConfig.sections.length + 1,
       title: SECTION_TYPE_LABELS[type] || "New Section",
       subtitle: "",
-      itemMode: isCategory || isProduct ? "CATEGORY" : "MANUAL",
+      itemMode,
       items: [],
       sourceCategoryId: null,
-      layoutKey: isCategory ? "CATEGORY_GRID_4" : isProduct ? "PRODUCT_GRID_3X2" : null,
-      selectionMode: isCategory || isProduct ? "AUTOMATIC" : null,
-      rowCount: isCategory ? 1 : isProduct ? 2 : null,
+      layoutKey,
+      selectionMode,
+      rowCount,
     };
     const updated = [...draftConfig.sections, newSection];
     setDraftConfig({ ...draftConfig, sections: updated });

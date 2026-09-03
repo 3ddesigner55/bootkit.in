@@ -21,7 +21,7 @@ import {
 import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
 import { useAccount } from "@/hooks/useAccount";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeEnvelope } from "@/lib/utils";
 
 type CustomerSummaryData = {
   totalCustomers: number;
@@ -35,6 +35,7 @@ type CustomerSummaryData = {
 
 type CustomerItem = {
   _id: string;
+  customerCode: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -97,11 +98,12 @@ export default function AdminCustomersPage() {
       const res = await fetch(`${baseUrl}/admin/customers?${params.toString()}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.customers)) {
-        setCustomers(data.customers);
-        setTotalPages(data.totalPages || 1);
-        setTotalCount(data.total || data.customers.length);
+      const rawData = await res.json();
+      const normalized = normalizeEnvelope<CustomerItem>(rawData, "customers");
+      if (normalized.success) {
+        setCustomers(normalized.items);
+        setTotalPages(normalized.pagination.totalPages);
+        setTotalCount(normalized.pagination.total);
       }
     } catch (err) {
       console.error("Failed to load customers", err);
@@ -256,13 +258,18 @@ export default function AdminCustomersPage() {
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {customers.map((c) => (
                     <tr key={c._id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-4 font-bold">
-                        <Link
-                          href={`/admin/customers/${c._id}`}
-                          className="text-slate-900 hover:text-[var(--primary)] flex items-center gap-1.5"
-                        >
-                          {c.firstName} {c.lastName}
-                        </Link>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/admin/customers/${c._id}`}
+                            className="text-slate-900 hover:text-[var(--primary)] font-bold"
+                          >
+                            {c.firstName || "N/A"} {c.lastName || ""}
+                          </Link>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[9px] text-slate-500 font-bold">
+                            {c.customerCode || "ID Pending"}
+                          </span>
+                        </div>
                         {c.email && (
                           <span className="text-[10px] text-slate-400 block font-normal">{c.email}</span>
                         )}

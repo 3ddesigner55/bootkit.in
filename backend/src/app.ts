@@ -54,6 +54,10 @@ import { adminTicketRoutes } from './routes/adminTicket.routes';
 import { adminReturnsRoutes } from './routes/adminReturns.routes';
 import { adminRefundsRoutes } from './routes/adminRefunds.routes';
 import { serviceabilityRoutes } from './routes/serviceability.routes';
+import {
+  adminHeaderNavigationRoutes,
+  headerNavigationRoutes,
+} from './routes/headerNavigation.routes';
 
 
 
@@ -134,6 +138,11 @@ app.use('/api/customer/serviceability', serviceabilityRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payments', paymentVerificationRoutes);
 app.use('/api/docs', docsRoutes);
+app.use('/api/header-navigation', headerNavigationRoutes);
+app.use(
+  '/api/admin/header-navigation',
+  adminHeaderNavigationRoutes,
+);
 
 app.use(errorRequestLogger);
 app.use(errorMiddleware);

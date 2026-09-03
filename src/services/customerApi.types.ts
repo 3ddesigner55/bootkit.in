@@ -101,6 +101,8 @@ export type CustomerCategory = {
   collectionHub?: string | null;
   productCount?: number;
   productThumbnails?: string[];
+  parentCategory?: string | CustomerCategoryReference | null;
+  homeSection?: string | null;
 };
 
 export type CustomerBrand = {
@@ -216,6 +218,7 @@ export type CustomerCatalogParams = {
   showOnHome?: boolean;
   minPrice?: number;
   maxPrice?: number;
+  hub?: string;
   sort?: "newest" | "priceAsc" | "priceDesc" | "nameAsc" | "nameDesc";
 };
 

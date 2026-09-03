@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -25,10 +25,11 @@ import {
 import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
 import { useAccount } from "@/hooks/useAccount";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, normalizeEnvelope } from "@/lib/utils";
 
 type CustomerProfile = {
   _id: string;
+  customerCode?: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -37,6 +38,8 @@ type CustomerProfile = {
   isActive: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
+  orderCount?: number;
+  totalSpend?: number;
 };
 
 type AddressItem = {
@@ -62,6 +65,7 @@ type OrderItem = {
   createdAt: string;
   deliveredAt?: string | null;
   cancelReason?: string;
+  items?: Array<{ name: string; quantity: number }>;
 };
 
 type RiskSignals = {
@@ -119,18 +123,45 @@ export default function AdminCustomerDetailPage({
   const [restrictions, setRestrictions] = useState<RestrictionItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Pagination for Orders
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersTotal, setOrdersTotal] = useState(0);
+  const ordersLimit = 3; // Show 3 orders per page
+  const isInitialMount = useRef(true);
+
   // Modals
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [walletAmount, setWalletAmount] = useState("");
   const [walletDirection, setWalletDirection] = useState<"CREDIT" | "DEBIT">("CREDIT");
   const [walletReason, setWalletReason] = useState("");
   const [isWalletSubmitting, setIsWalletSubmitting] = useState(false);
+  const walletAdjustmentKeyRef = useRef<string>("");
+  const walletAdjustmentPayloadRef = useRef<{ amount: number; direction: string; reason: string }>({ amount: 0, direction: "", reason: "" });
 
   const [isRestrictionModalOpen, setIsRestrictionModalOpen] = useState(false);
   const [restrictionType, setRestrictionType] = useState<"ACCOUNT_BLOCKED" | "ORDERING_BLOCKED" | "COD_DISABLED">("ORDERING_BLOCKED");
   const [restrictionReason, setRestrictionReason] = useState("Suspected suspicious repeat cancellations");
   const [restrictionNote, setRestrictionNote] = useState("");
   const [isRestricting, setIsRestricting] = useState(false);
+
+  const fetchOrders = useCallback(async (pageNumber: number) => {
+    if (!accessToken) return;
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+      const oRes = await fetch(
+        `${baseUrl}/admin/customers/${customerId}/orders?page=${pageNumber}&limit=${ordersLimit}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const oData = await oRes.json();
+      if (oData.success) {
+        const envelope = normalizeEnvelope<any>(oData, "orders");
+        setOrders(envelope.items);
+        setOrdersTotal(envelope.pagination?.total || envelope.items.length);
+      }
+    } catch (err) {
+      console.error("Failed to load customer orders", err);
+    }
+  }, [accessToken, customerId, ordersLimit]);
 
   const fetchData = useCallback(async () => {
     if (!accessToken) return;
@@ -141,7 +172,7 @@ export default function AdminCustomerDetailPage({
       const [cRes, aRes, oRes, rRes, wRes, tRes, reRes] = await Promise.all([
         fetch(`${baseUrl}/admin/customers/${customerId}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
         fetch(`${baseUrl}/admin/customers/${customerId}/addresses`, { headers: { Authorization: `Bearer ${accessToken}` } }),
-        fetch(`${baseUrl}/admin/customers/${customerId}/orders`, { headers: { Authorization: `Bearer ${accessToken}` } }),
+        fetch(`${baseUrl}/admin/customers/${customerId}/orders?page=${ordersPage}&limit=${ordersLimit}`, { headers: { Authorization: `Bearer ${accessToken}` } }),
         fetch(`${baseUrl}/admin/customers/${customerId}/risk-signals`, { headers: { Authorization: `Bearer ${accessToken}` } }),
         fetch(`${baseUrl}/admin/customers/${customerId}/wallet`, { headers: { Authorization: `Bearer ${accessToken}` } }),
         fetch(`${baseUrl}/admin/customers/${customerId}/wallet/transactions`, { headers: { Authorization: `Bearer ${accessToken}` } }),
@@ -152,28 +183,136 @@ export default function AdminCustomerDetailPage({
         cRes.json(), aRes.json(), oRes.json(), rRes.json(), wRes.json(), tRes.json(), reRes.json(),
       ]);
 
-      if (cData.success && cData.customer) setCustomer(cData.customer);
-      if (aData.success && Array.isArray(aData.addresses)) setAddresses(aData.addresses);
-      if (oData.success && Array.isArray(oData.orders)) setOrders(oData.orders);
-      if (rData.success && rData.data) setRiskSignals(rData.data);
-      if (wData.success && wData.wallet) setWallet(wData.wallet);
-      if (tData.success && Array.isArray(tData.transactions)) setTransactions(tData.transactions);
-      if (reData.success && Array.isArray(reData.restrictions)) setRestrictions(reData.restrictions);
+      if (cData.success) {
+        const customerProfile = cData.customer || cData.data;
+        if (customerProfile) setCustomer(customerProfile);
+      }
+
+      if (aData.success) {
+        setAddresses(normalizeEnvelope<any>(aData, "addresses").items);
+      }
+
+      if (oData.success) {
+        const envelope = normalizeEnvelope<any>(oData, "orders");
+        setOrders(envelope.items);
+        setOrdersTotal(envelope.pagination?.total || envelope.items.length);
+      }
+
+      if (rData.success && rData.data) {
+        setRiskSignals(rData.data);
+      }
+
+      if (wData.success) {
+        const walletVal = wData.wallet || wData.data;
+        if (walletVal) setWallet(walletVal);
+      }
+
+      if (tData.success) {
+        setTransactions(normalizeEnvelope<any>(tData, "transactions").items);
+      }
+
+      if (reData.success) {
+        setRestrictions(normalizeEnvelope<any>(reData, "restrictions").items);
+      }
     } catch (err) {
       console.error("Failed to load customer profile", err);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, customerId]);
+  }, [accessToken, customerId, ordersPage, ordersLimit]);
 
   useEffect(() => {
     if (!accountHydrated || !accessToken) return;
     void fetchData();
   }, [accountHydrated, accessToken, fetchData]);
 
+  useEffect(() => {
+    if (!accountHydrated || !accessToken) return;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    void fetchOrders(ordersPage);
+  }, [ordersPage, fetchOrders, accountHydrated, accessToken]);
+
+  const handleToggleBlock = async () => {
+    if (!customer) return;
+    const isBlocked = customer.status === "BLOCKED";
+    if (isBlocked) {
+      if (!confirm("Are you sure you want to unblock this customer?")) return;
+      try {
+        const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/admin/customers/${customerId}/unblock`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to unblock customer.");
+        }
+        alert("Customer unblocked successfully.");
+        void fetchData();
+      } catch (err: any) {
+        alert(err.message || "Action failed.");
+      }
+    } else {
+      const reason = prompt("Enter reason for blocking this customer:");
+      if (reason === null) return;
+      if (!reason.trim()) {
+        alert("Reason is required to block a customer.");
+        return;
+      }
+      try {
+        const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/admin/customers/${customerId}/block`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason: reason.trim() }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to block customer.");
+        }
+        alert("Customer blocked successfully.");
+        void fetchData();
+      } catch (err: any) {
+        alert(err.message || "Action failed.");
+      }
+    }
+  };
+
   const handleWalletAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsWalletSubmitting(true);
+
+    const parsedAmount = parseFloat(walletAmount);
+    const currentAmount = isNaN(parsedAmount) ? 0 : parsedAmount;
+    const currentDirection = walletDirection;
+    const currentReason = (walletReason || "Admin manual adjustment").trim();
+
+    const payloadChanged =
+      walletAdjustmentPayloadRef.current.amount !== currentAmount ||
+      walletAdjustmentPayloadRef.current.direction !== currentDirection ||
+      walletAdjustmentPayloadRef.current.reason !== currentReason;
+
+    if (payloadChanged || !walletAdjustmentKeyRef.current) {
+      walletAdjustmentKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `adj-${customerId}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+      walletAdjustmentPayloadRef.current = {
+        amount: currentAmount,
+        direction: currentDirection,
+        reason: currentReason,
+      };
+    }
+
     try {
       const baseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/$/, "");
       const res = await fetch(`${baseUrl}/admin/customers/${customerId}/wallet/adjustments`, {
@@ -183,13 +322,22 @@ export default function AdminCustomerDetailPage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          amount: parseFloat(walletAmount),
-          direction: walletDirection,
-          reason: walletReason || "Admin manual adjustment",
-          idempotencyKey: `adj-${customerId}-${Date.now()}`,
+          amount: currentAmount,
+          direction: currentDirection,
+          reason: currentReason,
+          idempotencyKey: walletAdjustmentKeyRef.current,
         }),
       });
+
+      // Parse the response first! If it's malformed, this throws and key is preserved.
       const data = await res.json();
+
+      // Clear only after confirmed success (2xx) or definitive 4xx rejections.
+      if (res.ok || (res.status >= 400 && res.status < 500)) {
+        walletAdjustmentKeyRef.current = "";
+        walletAdjustmentPayloadRef.current = { amount: 0, direction: "", reason: "" };
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Failed to adjust wallet funds.");
       }
@@ -303,8 +451,11 @@ export default function AdminCustomerDetailPage({
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-black text-[var(--text-primary)]">
-                    {customer.firstName} {customer.lastName}
+                    {customer.firstName || "N/A"} {customer.lastName || ""}
                   </h1>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 font-mono text-[11px] text-slate-500 font-black">
+                    {customer.customerCode || "ID Pending"}
+                  </span>
                   <span
                     className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
                       customer.status === "BLOCKED"
@@ -312,16 +463,29 @@ export default function AdminCustomerDetailPage({
                         : "bg-emerald-50 text-emerald-700"
                     }`}
                   >
-                    {customer.status}
+                    {customer.status || "ACTIVE"}
                   </span>
                 </div>
                 <p className="text-xs text-[var(--text-muted)] font-mono">
-                  Phone: {maskPhone(customer.phone)} | Member since {new Date(customer.createdAt).toLocaleDateString()}
+                  Phone: {maskPhone(customer.phone) || "N/A"} | Member since {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : "N/A"}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleBlock}
+                className={`h-10 px-4 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 shadow-sm ${
+                  customer.status === "BLOCKED"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                <Ban size={15} />
+                {customer.status === "BLOCKED" ? "Unblock Customer" : "Block Customer"}
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsWalletModalOpen(true)}
@@ -406,12 +570,13 @@ export default function AdminCustomerDetailPage({
                   Account Summary
                 </h2>
                 <div className="text-xs space-y-2 text-slate-600">
-                  <p>Customer ID: <strong className="font-mono text-slate-900">{customer._id}</strong></p>
-                  <p>Name: <strong className="text-slate-900">{customer.firstName} {customer.lastName}</strong></p>
+                  <p>Customer Code: <strong className="font-mono text-slate-900">{customer.customerCode || "ID Pending"}</strong></p>
+                  <p>Database ID: <strong className="font-mono text-[10px] text-slate-900">{customer._id}</strong></p>
+                  <p>Name: <strong className="text-slate-900">{customer.firstName || "N/A"} {customer.lastName || ""}</strong></p>
                   <p>Email: <strong className="text-slate-900">{customer.email || "Not provided"}</strong></p>
-                  <p>Phone: <strong className="font-mono text-slate-900">{maskPhone(customer.phone)}</strong></p>
-                  <p>Joined: <strong>{new Date(customer.createdAt).toLocaleDateString()}</strong></p>
-                  <p>Status: <strong className="text-slate-900">{customer.status}</strong></p>
+                  <p>Phone: <strong className="font-mono text-slate-900">{maskPhone(customer.phone) || "N/A"}</strong></p>
+                  <p>Joined: <strong>{customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : "N/A"}</strong></p>
+                  <p>Status: <strong className="text-slate-900">{customer.status || "ACTIVE"}</strong></p>
                 </div>
               </div>
 
@@ -422,22 +587,41 @@ export default function AdminCustomerDetailPage({
                 </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {addresses.map((addr) => (
+                   {addresses.map((addr: any) => (
                     <div key={addr._id} className="bg-white p-5 rounded-2xl border border-[var(--border)] shadow-sm space-y-1 text-xs text-slate-600">
                       <div className="flex items-center justify-between mb-2">
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 font-bold text-[10px] text-slate-700">
                           {addr.label || "Address"}
                         </span>
-                        {addr.isDefault && (
-                          <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                            Default
-                          </span>
-                        )}
+                        <div className="flex gap-1.5">
+                          {addr.recipientType && (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[9px] font-bold">
+                              {addr.recipientType}
+                            </span>
+                          )}
+                          {addr.isDefault && (
+                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                              Default
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <p className="font-bold text-slate-900">{addr.recipientName || `${customer.firstName} ${customer.lastName}`}</p>
-                      <p>{addr.street}</p>
-                      <p>{addr.city}, {addr.state} - <strong className="font-mono text-slate-900">{addr.pincode}</strong></p>
+                      <p className="font-bold text-slate-900">{addr.fullName || "N/A"}</p>
+                      {addr.phone && <p className="text-slate-500 font-mono text-[10px]">{addr.phone}</p>}
+                      <p>{addr.addressLine1}</p>
+                      {addr.addressLine2 && <p>{addr.addressLine2}</p>}
                       {addr.landmark && <p className="text-slate-400">Landmark: {addr.landmark}</p>}
+                      <p>{addr.city}, {addr.state} - <strong className="font-mono text-slate-900">{addr.postalCode}</strong></p>
+                      {addr.googleMapsLink && (
+                        <a
+                          href={addr.googleMapsLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 text-[10px] text-blue-600 hover:underline font-bold"
+                        >
+                          View on Google Maps
+                        </a>
+                      )}
                     </div>
                   ))}
 
@@ -453,87 +637,164 @@ export default function AdminCustomerDetailPage({
 
           {/* TAB B: Customer Order History & Risk Signals */}
           {activeTab === "orders" && (
-            <div className="space-y-6">
-              {/* Risk Signals */}
-              {riskSignals && (
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">Total Placed</span>
-                    <p className="text-lg font-black text-slate-900">{riskSignals.totalOrders}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start animate-in fade-in duration-200">
+              {/* Left Column: Risk & Order Stats Card */}
+              <div className="bg-white p-5 rounded-2xl border border-[var(--border)] shadow-sm space-y-4">
+                <h2 className="text-xs font-black text-slate-800 flex items-center gap-2 pb-3 border-b">
+                  <span className="text-base">🛡️</span> RISK & ORDER STATS
+                </h2>
+
+                <div className="space-y-3.5 text-xs text-slate-600">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">Fraud Risk Level:</span>
+                    {(() => {
+                      const ratePercent = riskSignals ? parseFloat(riskSignals.cancellationRate) : 0;
+                      const isHigh = ratePercent > 30;
+                      const isMed = ratePercent > 15;
+                      return (
+                        <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
+                          isHigh ? "text-red-700 bg-red-50" : isMed ? "text-amber-700 bg-amber-50" : "text-emerald-700 bg-emerald-50"
+                        }`}>
+                          {isHigh ? "🔴 HIGH" : isMed ? "🟡 MEDIUM" : "🟢 LOW"}
+                        </span>
+                      );
+                    })()}
                   </div>
-                  <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">Delivered</span>
-                    <p className="text-lg font-black text-emerald-600">{riskSignals.deliveredOrders}</p>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">Total Orders:</span>
+                    <strong className="text-slate-900 font-mono text-sm">{riskSignals?.totalOrders || 0}</strong>
                   </div>
-                  <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">Cancelled</span>
-                    <p className="text-lg font-black text-red-600">{riskSignals.cancelledOrders}</p>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">Total Spent:</span>
+                    <strong className="text-slate-900 font-mono text-sm">{customer ? formatPrice(customer.totalSpend || 0) : "₹0"}</strong>
                   </div>
-                  <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">Cancellation Rate</span>
-                    <p className="text-lg font-black text-slate-900">{riskSignals.cancellationRate}</p>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">Cancelled:</span>
+                    <span className="font-bold text-red-600">
+                      {riskSignals?.cancelledOrders || 0} ({riskSignals?.cancellationRate || "0%"})
+                    </span>
                   </div>
-                  <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                    <span className="text-[11px] font-bold text-slate-400 block mb-1">Refund Requests</span>
-                    <p className="text-lg font-black text-purple-600">{riskSignals.refundCount}</p>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">COD Refusals:</span>
+                    <span className="font-bold text-slate-900 font-mono">0</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-slate-500">Avg. Order Val:</span>
+                    <strong className="text-slate-900 font-mono">
+                      {(() => {
+                        const count = riskSignals?.totalOrders || 0;
+                        const spent = customer?.totalSpend || 0;
+                        return formatPrice(count > 0 ? Math.round(spent / count) : 0);
+                      })()}
+                    </strong>
+                  </div>
+
+                  <div className="pt-4 border-t space-y-2">
+                    <span className="font-black text-slate-800 flex items-center gap-1 text-[11px]">
+                      <span className="text-sm">⚠️</span> System Note:
+                    </span>
+                    <p className="p-3.5 bg-slate-50 rounded-xl text-[11px] text-slate-500 leading-relaxed italic">
+                      {(() => {
+                        const ratePercent = riskSignals ? parseFloat(riskSignals.cancellationRate) : 0;
+                        if (ratePercent > 30) {
+                          return "High cancellation rate detected. Recommend disabling cash on delivery (COD) payment options.";
+                        }
+                        if (ratePercent > 15) {
+                          return "Moderate cancellation activity. Keep under monitoring for cash-on-delivery orders.";
+                        }
+                        return "Good customer. Order fulfillment rate is excellent. Mostly pays via UPI.";
+                      })()}
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Orders Table */}
-              <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-slate-100 font-black text-sm text-slate-800">
-                  Order History ({orders.length})
+              {/* Right Column: Recent Orders List/Table */}
+              <div className="lg:col-span-2 bg-white rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-100 font-black text-sm text-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🛍️</span> RECENT ORDERS (Total: {ordersTotal})
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-black uppercase text-slate-400">
-                        <th className="py-3 px-4">Order #</th>
-                        <th className="py-3 px-4">Date</th>
-                        <th className="py-3 px-4">Amount</th>
-                        <th className="py-3 px-4">Payment</th>
-                        <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Action</th>
+                      <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase text-slate-400">
+                        <th className="py-3.5 px-5">Order ID</th>
+                        <th className="py-3.5 px-4">Date</th>
+                        <th className="py-3.5 px-4">Amount</th>
+                        <th className="py-3.5 px-4">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium">
                       {orders.map((o) => (
-                        <tr key={o._id} className="hover:bg-slate-50/60 transition">
-                          <td className="py-3.5 px-4 font-black">
-                            <Link href={`/admin/orders/${o.orderNumber}`} className="text-[var(--primary)] hover:underline">
-                              #{o.orderNumber}
-                            </Link>
+                        <tr key={o._id} className="hover:bg-slate-50/40 transition">
+                          <td className="py-4 px-5 align-top">
+                            <div className="space-y-1">
+                              <Link href={`/admin/orders/${o.orderNumber}`} className="font-black text-[var(--primary)] hover:underline">
+                                #{o.orderNumber}
+                              </Link>
+                              {o.items && o.items.length > 0 && (
+                                <p className="text-[10px] text-slate-400 font-bold">
+                                  {o.items.reduce((acc, it) => acc + it.quantity, 0)} Item
+                                  {o.items.reduce((acc, it) => acc + it.quantity, 0) > 1 ? "s" : ""}{" "}
+                                  ({o.items.map((it) => it.name).join(", ")})
+                                </p>
+                              )}
+                            </div>
                           </td>
-                          <td className="py-3.5 px-4 text-slate-500">
-                            {new Date(o.createdAt).toLocaleDateString()}
+                          <td className="py-4 px-4 text-slate-500 align-top pt-5">
+                            {new Date(o.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short"
+                            })}
                           </td>
-                          <td className="py-3.5 px-4 font-bold text-slate-900">
+                          <td className="py-4 px-4 font-bold text-slate-900 align-top pt-5">
                             {formatPrice(o.grandTotal)}
                           </td>
-                          <td className="py-3.5 px-4 text-slate-600">
-                            {o.paymentMethod}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700">
-                              {o.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <Link
-                              href={`/admin/orders/${o.orderNumber}`}
-                              className="inline-flex h-7 items-center gap-1 px-2.5 rounded-lg border border-[var(--border)] text-[10px] font-bold text-slate-700 hover:bg-slate-100"
-                            >
-                              View
-                            </Link>
+                          <td className="py-4 px-4 align-top pt-4">
+                            <div className="flex items-center justify-between gap-2">
+                              {(() => {
+                                const status = o.status;
+                                let statusClass = "text-blue-700 bg-blue-50";
+                                let statusText = status;
+                                if (status === "DELIVERED") {
+                                  statusClass = "text-emerald-700 bg-emerald-50";
+                                  statusText = "✅ Deliv";
+                                } else if (status === "CANCELLED") {
+                                  statusClass = "text-red-700 bg-red-50";
+                                  statusText = "❌ Cancel";
+                                } else if (status === "IN_TRANSIT") {
+                                  statusClass = "text-amber-700 bg-amber-50";
+                                  statusText = "🚚 Transit";
+                                }
+                                return (
+                                  <span className={`px-2 py-0.5 rounded font-black text-[9px] uppercase ${statusClass}`}>
+                                    {statusText}
+                                  </span>
+                                );
+                              })()}
+
+                              <Link
+                                href={`/admin/orders/${o.orderNumber}`}
+                                className="inline-flex h-6 items-center px-2 rounded border border-slate-200 text-[9px] font-bold text-slate-600 hover:bg-slate-50 transition"
+                              >
+                                View
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
 
                       {orders.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                          <td colSpan={4} className="py-12 text-center text-slate-400">
                             No orders placed by this customer yet.
                           </td>
                         </tr>
@@ -541,6 +802,31 @@ export default function AdminCustomerDetailPage({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {ordersTotal > ordersLimit && (
+                  <div className="p-4 border-t border-slate-100 flex items-center justify-center gap-4 bg-slate-50/50">
+                    <button
+                      type="button"
+                      disabled={ordersPage === 1}
+                      onClick={() => setOrdersPage((p) => Math.max(p - 1, 1))}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      &lt; Prev Page
+                    </button>
+                    <span className="text-[10px] font-black text-slate-500 font-mono">
+                      Page {ordersPage} of {Math.ceil(ordersTotal / ordersLimit)}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={ordersPage >= Math.ceil(ordersTotal / ordersLimit)}
+                      onClick={() => setOrdersPage((p) => p + 1)}
+                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      Next Page &gt;
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

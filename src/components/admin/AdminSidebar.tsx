@@ -37,6 +37,7 @@ const navigationItems = [
   { label: "Home Merchandising", href: "/admin/home-builder", icon: Sparkles },
   { label: "Products", href: "/admin/products", icon: Boxes },
   { label: "Categories", href: "/admin/categories", icon: Grid2X2 },
+  { label: "Header Categories", href: "/admin/header-categories", icon: Grid2X2 },
   { label: "Brands", href: "/admin/brands", icon: Tags },
   { label: "Media Library", href: "/admin/media", icon: Image },
   { label: "Hero Banners", href: "/admin/banners", icon: FileImage },

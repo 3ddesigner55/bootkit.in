@@ -30,6 +30,7 @@ import {
   Save,
   X,
   FileSpreadsheet,
+  Loader2,
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
@@ -47,6 +48,7 @@ type CategoryTreeNode = {
   icon?: string;
   image?: string;
   banner?: string;
+  collectionHub?: string | null;
   parentCategory?: string | null;
   level: number;
   fullPath: string;
@@ -106,10 +108,12 @@ export default function AdminCategoriesClient() {
     image: "",
     icon: "",
     banner: "",
+    collectionHub: "",
     active: true,
     sortOrder: 1,
   });
   const [savingCategory, setSavingCategory] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [formError, setFormError] = useState("");
 
   // CSV Import Modal State
@@ -137,6 +141,8 @@ export default function AdminCategoriesClient() {
       return;
     }
     try {
+      setUploadingImage(true);
+      setFormError("");
       const formDataObj = new FormData();
       formDataObj.append("image", item.file);
 
@@ -161,6 +167,8 @@ export default function AdminCategoriesClient() {
           ? uploadError.message
           : "Category image could not be uploaded.",
       );
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -242,6 +250,7 @@ export default function AdminCategoriesClient() {
       image: "",
       icon: "",
       banner: "",
+      collectionHub: "",
       active: true,
       sortOrder: 1,
     });
@@ -259,6 +268,7 @@ export default function AdminCategoriesClient() {
       image: node.image || "",
       icon: node.icon || "",
       banner: node.banner || "",
+      collectionHub: node.collectionHub || "",
       active: node.active !== false,
       sortOrder: node.sortOrder || 1,
     });
@@ -278,6 +288,7 @@ export default function AdminCategoriesClient() {
       const payload = {
         ...formData,
         parentCategory: formData.parentCategory || null,
+        collectionHub: formData.collectionHub || null,
         sortOrder: parseInt(String(formData.sortOrder), 10) || 0,
       };
 
@@ -781,6 +792,38 @@ export default function AdminCategoriesClient() {
                         ))}
                     </select>
                   </div>
+                  {computedFormLevel === 1 ? (
+  <div>
+    <label className="mb-1 block font-bold text-slate-700">
+      Header Icon Collection
+    </label>
+
+    <select
+      value={formData.collectionHub}
+      onChange={(event) =>
+        setFormData((current) => ({
+          ...current,
+          collectionHub: event.target.value,
+        }))
+      }
+      className="h-10 w-full rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-bold outline-none focus:border-[var(--primary)]"
+    >
+      <option value="">Do not show in header</option>
+      <option value="beauty">Beauty</option>
+      <option value="electronics">Electronics</option>
+      <option value="pharmacy">Pharmacy</option>
+      <option value="decor">Decor</option>
+      <option value="kids">Kids</option>
+      <option value="gifting">Gifting</option>
+    </select>
+
+    <p className="mt-1 text-[10px] text-slate-500">
+      Selecting a collection links this category with the customer header icon.
+    </p>
+  </div>
+) : null}
+
+
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -808,9 +851,9 @@ export default function AdminCategoriesClient() {
                     </div>
                   </div>
 
-                  {computedFormLevel === 1 ? (
+                  {computedFormLevel === 1 && (
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Icon / Emoji</label>
+                      <label className="block font-bold text-slate-700 mb-1">Icon / Emoji (Optional)</label>
                       <input
                         type="text"
                         placeholder="e.g. 🍎"
@@ -819,31 +862,45 @@ export default function AdminCategoriesClient() {
                         className="w-full h-10 px-3 border rounded-xl text-xs outline-none focus:border-[var(--primary)]"
                       />
                     </div>
-                  ) : (
-                    <div className="mt-1">
-                      <ImageUploader
-                        label={computedFormLevel === 2 ? "Sub-Category Image" : "Leaf Category Image"}
-                        value={
-                          formData.image
-                            ? [
-                                {
-                                  id: "category-image",
-                                  url: formData.image,
-                                  name: "Category image",
-                                  progress: formData.image.startsWith("blob:") ? 0 : 100,
-                                  status: formData.image.startsWith("blob:")
-                                    ? "ready"
-                                    : "uploaded",
-                                },
-                              ]
-                            : []
-                        }
-                        onChange={(items) => {
-                          void updateCategoryImage(items);
-                        }}
-                      />
-                    </div>
                   )}
+
+                  <div className="mt-1">
+                    <ImageUploader
+                      label={
+                        computedFormLevel === 1
+                          ? "Category Image / Thumbnail"
+                          : computedFormLevel === 2
+                          ? "Sub-Category Image / Thumbnail"
+                          : "Leaf Category Image / Thumbnail"
+                      }
+                      helperText="Drag & drop or click to upload category image (JPG, PNG, WebP, AVIF up to 5MB)"
+                      disabled={savingCategory || uploadingImage}
+                      value={
+                        formData.image
+                          ? [
+                              {
+                                id: "category-image",
+                                url: formData.image,
+                                name: formData.name ? `${formData.name} image` : "Category image",
+                                progress: uploadingImage ? 50 : 100,
+                                status: uploadingImage
+                                  ? "ready"
+                                  : "uploaded",
+                              },
+                            ]
+                          : []
+                      }
+                      onChange={(items) => {
+                        void updateCategoryImage(items);
+                      }}
+                    />
+                    {uploadingImage && (
+                      <div className="mt-2 flex items-center gap-2 rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-xs font-bold text-[var(--primary)]">
+                        <Loader2 size={14} className="animate-spin text-[var(--primary)]" />
+                        Uploading image to server, please wait...
+                      </div>
+                    )}
+                  </div>
 
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Description</label>
@@ -882,18 +939,33 @@ export default function AdminCategoriesClient() {
                   <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                     <button
                       type="button"
+                      disabled={savingCategory || uploadingImage}
                       onClick={() => setIsFormOpen(false)}
-                      className="h-10 px-4 rounded-xl border text-xs font-bold text-slate-600 hover:bg-slate-50"
+                      className="h-10 px-4 rounded-xl border text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={savingCategory}
+                      disabled={savingCategory || uploadingImage}
                       className="h-10 px-5 rounded-xl bg-[var(--primary)] text-white text-xs font-bold hover:brightness-95 disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      <Save size={14} />
-                      {savingCategory ? "Saving..." : "Save Category"}
+                      {uploadingImage ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Uploading Image...
+                        </>
+                      ) : savingCategory ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} />
+                          Save Category
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>

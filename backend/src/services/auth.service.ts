@@ -6,6 +6,7 @@ import { smsProvider } from '../config/sms';
 import { HTTP_STATUS } from '../constants/httpStatus';
 import Otp from '../models/otp.model';
 import User, { type UserDocument } from '../models/user.model';
+import { allocateCustomerCode } from './customerCode.service';
 import { sendEmail } from './notification.service';
 import type { ApiError } from '../types/api';
 import { comparePassword, hashPassword } from '../utils/password';
@@ -24,6 +25,7 @@ import type {
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const OTP_RESEND_COOLDOWN_MS = 30 * 1000;
+const MAX_OTP_VERIFY_ATTEMPTS = 5;
 
 type AuthUser = Pick<
   UserDocument,
@@ -198,7 +200,7 @@ const otp = developmentOtp ?? generateOtp();
           { lastSentAt: { $lte: resendAfter } },
         ],
       },
-      { otpHash, expiresAt, lastSentAt: now },
+      { otpHash, expiresAt, lastSentAt: now, verifyAttempts: 0 },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     ).select('+otpHash');
   } catch (error) {
@@ -240,11 +242,40 @@ export async function verifyOtp(input: VerifyOtpInput): Promise<AuthResult> {
     expiresAt: { $gt: new Date() },
   }).select('+otpHash');
 
-  if (!otpRecord || !(await comparePassword(input.otp, otpRecord.otpHash))) {
+  if (!otpRecord) {
     throw serviceError('Invalid or expired OTP.', HTTP_STATUS.UNAUTHORIZED);
   }
 
-  const consumedOtp = await Otp.findOneAndDelete({ _id: otpRecord._id });
+  if (otpRecord.verifyAttempts >= MAX_OTP_VERIFY_ATTEMPTS) {
+    await Otp.deleteOne({ _id: otpRecord._id });
+    throw serviceError('Invalid or expired OTP.', HTTP_STATUS.UNAUTHORIZED);
+  }
+
+  const otpMatch = await comparePassword(input.otp, otpRecord.otpHash);
+  if (!otpMatch) {
+    const updatedRecord = await Otp.findOneAndUpdate(
+      { _id: otpRecord._id, verifyAttempts: { $lt: MAX_OTP_VERIFY_ATTEMPTS } },
+      { $inc: { verifyAttempts: 1 } },
+      { new: true }
+    );
+
+    if (!updatedRecord) {
+      await Otp.deleteOne({ _id: otpRecord._id });
+      throw serviceError('Invalid or expired OTP.', HTTP_STATUS.UNAUTHORIZED);
+    }
+
+    if (updatedRecord.verifyAttempts >= MAX_OTP_VERIFY_ATTEMPTS) {
+      await Otp.deleteOne({ _id: otpRecord._id });
+    }
+
+    throw serviceError('Invalid or expired OTP.', HTTP_STATUS.UNAUTHORIZED);
+  }
+
+  const consumedOtp = await Otp.findOneAndDelete({
+    _id: otpRecord._id,
+    expiresAt: { $gt: new Date() },
+    verifyAttempts: { $lt: MAX_OTP_VERIFY_ATTEMPTS }
+  });
 
   if (!consumedOtp) {
     throw serviceError('Invalid or expired OTP.', HTTP_STATUS.UNAUTHORIZED);
@@ -260,11 +291,13 @@ export async function verifyOtp(input: VerifyOtpInput): Promise<AuthResult> {
   }
 
   if (!user) {
+    const customerCode = await allocateCustomerCode();
     user = await User.create({
       phone: input.phone,
       isVerified: true,
       phoneVerifiedAt: new Date(),
       lastLoginAt: new Date(),
+      customerCode,
     });
   } else {
     user.isVerified = true;

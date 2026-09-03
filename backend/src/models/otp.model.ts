@@ -5,6 +5,7 @@ export type OtpDocument = {
   otpHash: string;
   expiresAt: Date;
   lastSentAt: Date;
+  verifyAttempts: number;
 };
 
 const otpSchema = new Schema<OtpDocument>(
@@ -13,6 +14,7 @@ const otpSchema = new Schema<OtpDocument>(
     otpHash: { type: String, required: true, select: false },
     expiresAt: { type: Date, required: true },
     lastSentAt: { type: Date, required: true },
+    verifyAttempts: { type: Number, required: true, default: 0 },
   },
   { timestamps: true },
 );

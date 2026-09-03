@@ -365,6 +365,20 @@ export function toCustomerCategory(value: unknown): CustomerCategory {
           ),
         }
       : {}),
+
+          ...(record.parentCategory === null
+      ? { parentCategory: null }
+      : typeof record.parentCategory === "string"
+        ? { parentCategory: record.parentCategory }
+        : record.parentCategory &&
+            typeof record.parentCategory === "object" &&
+            !Array.isArray(record.parentCategory)
+          ? { parentCategory: toCategoryReference(record.parentCategory) }
+          : {}),
+    ...(record.homeSection === null ||
+    typeof record.homeSection === "string"
+      ? { homeSection: record.homeSection }
+      : {}),
   };
 }
 
