@@ -136,7 +136,36 @@ function appendQuery(path: string, params: Record<string, string | undefined>) {
 
 const homeDataCache = new Map<string, { data: CustomerHomeData; timestamp: number }>();
 const pendingHomeRequests = new Map<string, Promise<CustomerHomeData>>();
+const homeDataListeners = new Set<(data: CustomerHomeData) => void>();
 const HOME_CACHE_TTL_MS = 60 * 1000; // 60s cache
+
+export function subscribeHomeDataUpdates(
+  listener: (data: CustomerHomeData) => void,
+): () => void {
+  homeDataListeners.add(listener);
+  return () => {
+    homeDataListeners.delete(listener);
+  };
+}
+
+export function invalidateHomeDataCache() {
+  homeDataCache.clear();
+  pendingHomeRequests.clear();
+}
+
+export function broadcastHomeConfigUpdate() {
+  invalidateHomeDataCache();
+  if (typeof window !== "undefined") {
+    try {
+      const channel = new BroadcastChannel("bootkit_merchandising");
+      channel.postMessage({ type: "HOME_CONFIG_UPDATED", timestamp: Date.now() });
+      channel.close();
+    } catch {}
+    try {
+      localStorage.setItem("bootkit_merchandising_sync", String(Date.now()));
+    } catch {}
+  }
+}
 
 export function getCachedCustomerHomeData(
   storeId?: string,
@@ -152,10 +181,14 @@ export function getCachedCustomerHomeData(
 
 export async function getCustomerHomeData(
   storeId?: string,
-  city?: string
+  city?: string,
+  forceRefresh = false,
 ): Promise<CustomerHomeData> {
   const key = `${storeId || ""}:${city || ""}`;
-  const cached = getCachedCustomerHomeData(storeId, city);
+  if (forceRefresh) {
+    homeDataCache.delete(key);
+  }
+  const cached = forceRefresh ? null : getCachedCustomerHomeData(storeId, city);
 
   if (cached) {
     if (!pendingHomeRequests.has(key)) {
@@ -217,6 +250,13 @@ async function fetchCustomerHomeData(
       };
 
       homeDataCache.set(cacheKey, { data: result, timestamp: Date.now() });
+      homeDataListeners.forEach((listener) => {
+        try {
+          listener(result);
+        } catch (err) {
+          console.error("Home data listener error:", err);
+        }
+      });
       return result;
     } finally {
       pendingHomeRequests.delete(cacheKey);

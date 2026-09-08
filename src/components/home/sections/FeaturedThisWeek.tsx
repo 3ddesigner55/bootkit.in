@@ -60,16 +60,33 @@ export default function FeaturedThisWeek({
         <h2 className="text-lg font-bold">{title}</h2>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide">
-        {banners.map((banner) => (
-          <Link key={banner.id} href={banner.buttonLink || "/products"}>
-            <img
-              src={banner.mobileImage || banner.desktopImage}
-              alt={banner.title}
-              className="h-44 w-36 flex-shrink-0 rounded-2xl object-cover"
-            />
-          </Link>
-        ))}
+      <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
+        {banners.map((banner, index) => {
+          const fallbackImg = `/images/banners/banner${(index % 3) + 1}.png`;
+          const imgSrc = banner.mobileImage || banner.desktopImage || fallbackImg;
+
+          return (
+            <Link
+              key={banner.id || `featured-banner-${index}`}
+              href={banner.buttonLink || "/products"}
+              className="group relative flex-shrink-0 block w-72 sm:w-80 md:w-96 h-40 sm:h-44 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all duration-200 snap-start bg-gray-100 border border-gray-100"
+            >
+              <img
+                src={imgSrc}
+                alt={banner.title || "Featured Banner"}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src !== fallbackImg && !target.src.endsWith(fallbackImg)) {
+                    target.src = fallbackImg;
+                  } else {
+                    target.src = "/images/banners/placeholder.png";
+                  }
+                }}
+                className="w-full h-full object-cover rounded-2xl group-hover:scale-[1.02] transition-transform duration-300"
+              />
+            </Link>
+          );
+        })}
       </div>
     </section>
   );

@@ -221,7 +221,11 @@ export function mapProductWithStoreInventory(
 
   const productIdStr = String(product._id);
   const baseKey = `${productIdStr}_`;
-  const baseInv = inventoryMap.get(baseKey);
+  const pSku = product.sku ? String(product.sku) : '';
+  const baseInv =
+    inventoryMap.get(baseKey) ||
+    (pSku ? inventoryMap.get(`${productIdStr}_${pSku}`) : undefined) ||
+    Array.from(inventoryMap.entries()).find(([k]) => k.startsWith(`${productIdStr}_`))?.[1];
 
   // If variants exist on product
   const rawVariants = product.variants as ProductVariantDocument[] | undefined;

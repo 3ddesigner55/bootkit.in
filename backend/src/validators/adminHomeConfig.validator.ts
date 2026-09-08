@@ -45,8 +45,8 @@ const SECTION_ITEM_COMPATIBILITY: Record<SectionType, ItemType[]> = {
   hero_carousel: ['banner'],
   featured_banner: ['banner'],
   featured_this_week: ['banner'],
-  offer: ['offer'],
-  offer_section: ['offer'],
+  offer: ['offer', 'banner'],
+  offer_section: ['offer', 'banner'],
   best_sellers: ['category', 'collection'],
   best_seller_grid: ['category', 'collection'],
   grocery_kitchen: ['category'],
@@ -144,7 +144,7 @@ export function validateHomeConfigSection(section: any, index: number): HomeConf
     ? section.itemMode
     : 'MANUAL';
 
-  if (itemMode === 'BEST_SELLING' && !['best_sellers', 'product_grid'].includes(section.type)) {
+  if (itemMode === 'BEST_SELLING' && !['best_sellers', 'best_seller_grid', 'product_grid'].includes(section.type)) {
     throw validationError(`BEST_SELLING mode is not allowed for section type "${section.type}".`);
   }
 
@@ -208,6 +208,10 @@ export function validateHomeConfigSection(section: any, index: number): HomeConf
 
       const targetValue = sanitizeText(item.targetValue, `items[${itemIdx}].targetValue in section ${sectionId}`);
 
+      const displayProductIds = Array.isArray(item.displayProductIds)
+        ? item.displayProductIds.filter((id: any) => isValidObjectId(id))
+        : [];
+
       validatedItems.push({
         itemType: item.itemType,
         referenceId: item.referenceId,
@@ -215,6 +219,7 @@ export function validateHomeConfigSection(section: any, index: number): HomeConf
         active: item.active !== false,
         targetType,
         targetValue,
+        displayProductIds,
       });
     });
   }

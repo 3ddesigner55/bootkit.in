@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useAccount } from "@/hooks/useAccount";
 import { getApiBaseUrl } from "@/services/api";
+import { broadcastHomeConfigUpdate } from "@/services/customerApi.service";
 
 type SectionType =
   | "hero_carousel"
@@ -99,6 +100,27 @@ const SECTION_TYPE_LABELS: Record<string, string> = {
   category_grid: "Category Grid — 4 per row",
 };
 
+const ALLOWED_ITEM_TYPES_FOR_SECTION: Record<string, ItemType[]> = {
+  hero_banner: ["banner"],
+  hero_carousel: ["banner"],
+  featured_banner: ["banner"],
+  featured_this_week: ["banner"],
+  offer: ["offer", "banner"],
+  offer_section: ["offer", "banner"],
+  best_sellers: ["category"],
+  best_seller_grid: ["category"],
+  grocery_kitchen: ["category"],
+  dry_food_masala: ["product"],
+  household_essentials: ["category"],
+  sweet_tooth: ["product"],
+  snacks_drinks: ["category"],
+  beauty_personal_care: ["category"],
+  store_spotlight: ["store"],
+  category_cards: ["category"],
+  product_grid: ["product"],
+  category_grid: ["category"],
+};
+
 const ALLOWED_ADD_SECTION_TYPES: SectionType[] = [
   "category_grid",
   "product_grid",
@@ -122,6 +144,7 @@ export default function AdminHomeBuilderClient() {
   const [selectedSectionIdx, setSelectedSectionIdx] = useState<number>(0);
   const [showAddSectionModal, setShowAddSectionModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [addItemSearch, setAddItemSearch] = useState("");
   const [publishModalOpen, setPublishModalOpen] = useState(false);
 
   // Available referenced options for item picker
@@ -134,15 +157,40 @@ export default function AdminHomeBuilderClient() {
   const [previewData, setPreviewData] = useState<any | null>(null);
   const [historyData, setHistoryData] = useState<any | null>(null);
 
+  const isItemIncompatible = (sectionType: string, itemType: ItemType): boolean => {
+    const allowed = ALLOWED_ITEM_TYPES_FOR_SECTION[sectionType];
+    if (!allowed) return false;
+    return !allowed.includes(itemType);
+  };
+
+  const getItemLabel = (item: ConfigItem): string => {
+    if (item.label) return item.label;
+    if (item.itemType === "category") {
+      return availableCategories.find((c) => c._id === item.referenceId)?.name || item.referenceId;
+    }
+    if (item.itemType === "product") {
+      return availableProducts.find((p) => p._id === item.referenceId)?.name || item.referenceId;
+    }
+    if (item.itemType === "banner") {
+      return availableBanners.find((b) => b._id === item.referenceId)?.title || item.referenceId;
+    }
+    if (item.itemType === "store") {
+      return availableStores.find((s) => s._id === item.referenceId)?.name || item.referenceId;
+    }
+    return item.referenceId;
+  };
+
   const validateSectionClient = (sec: ConfigSection): string[] => {
     const errors: string[] = [];
     const sectionType = ['category_cards', 'grocery_kitchen', 'household_essentials', 'snacks_drinks', 'beauty_personal_care', 'category_grid'].includes(sec.type)
       ? 'category_grid'
       : ['sweet_tooth', 'dry_food_masala', 'product_grid'].includes(sec.type)
       ? 'product_grid'
+      : ['best_sellers', 'best_seller_grid'].includes(sec.type)
+      ? 'best_sellers'
       : sec.type;
 
-    const layoutKey = sec.layoutKey || (sectionType === 'category_grid' ? 'CATEGORY_GRID_4' : sectionType === 'product_grid' ? 'PRODUCT_GRID_3X2' : null);
+    const layoutKey = sec.layoutKey || (sectionType === 'category_grid' ? 'CATEGORY_GRID_4' : sectionType === 'product_grid' ? 'PRODUCT_GRID_3X2' : sectionType === 'best_sellers' ? 'BEST_SELLERS_3X2' : null);
     const rowCount = sec.rowCount || (layoutKey === 'CATEGORY_GRID_4' ? (sec.sectionId === 'grocery_kitchen' ? 1 : 2) : 2);
     const selectionMode = sec.selectionMode || (sec.items && sec.items.length > 0 ? 'MANUAL' : 'AUTOMATIC');
 
@@ -181,18 +229,9 @@ export default function AdminHomeBuilderClient() {
         const expected = rowCount * 4;
         if (activeItems.length === 0) {
           errors.push("No manual items selected");
-        } else if (activeItems.length !== expected) {
-          errors.push(`Requires exactly ${expected} child categories (currently has ${activeItems.length})`);
+        } else if (activeItems.length > expected) {
+          errors.push(`Maximum ${expected} categories allowed (currently has ${activeItems.length})`);
         } else {
-          const descendantIds = new Set<string>();
-          descendantIds.add(sec.sourceCategoryId || "");
-          availableCategories.forEach(c => {
-            const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
-            if (pId === sec.sourceCategoryId) {
-              descendantIds.add(c._id);
-            }
-          });
-
           for (const item of activeItems) {
             if (item.itemType !== 'category') {
               errors.push(`Incompatible item type "${item.itemType}". Only category items are allowed.`);
@@ -201,13 +240,6 @@ export default function AdminHomeBuilderClient() {
             const childCat = availableCategories.find(c => c._id === item.referenceId);
             if (!childCat) {
               errors.push(`Child category reference ${item.referenceId} does not exist`);
-            } else {
-              if (!descendantIds.has(childCat._id)) {
-                errors.push(`Item "${childCat.name}" does not belong to the source hierarchy.`);
-              }
-              if (!resolveCategoryImage(childCat)) {
-                errors.push(`Item "${childCat.name}" has no valid image.`);
-              }
             }
           }
         }
@@ -228,8 +260,8 @@ export default function AdminHomeBuilderClient() {
         const activeItems = (sec.items || []).filter(i => i.active);
         if (activeItems.length === 0) {
           errors.push("No manual products selected");
-        } else if (activeItems.length !== 6) {
-          errors.push(`Requires exactly 6 products (currently has ${activeItems.length})`);
+        } else if (activeItems.length > 6) {
+          errors.push(`Maximum 6 products allowed (currently has ${activeItems.length})`);
         } else {
           for (const item of activeItems) {
             if (item.itemType !== 'product') {
@@ -239,12 +271,57 @@ export default function AdminHomeBuilderClient() {
             const prod = availableProducts.find(p => p._id === item.referenceId);
             if (!prod) {
               errors.push(`Product reference ${item.referenceId} does not exist`);
-            } else {
-              if (!prod.thumbnail && !prod.image) {
-                errors.push(`Product "${prod.name}" has no usable image.`);
-              }
             }
           }
+        }
+      }
+    } else if (sectionType === 'best_sellers') {
+      if (selectionMode === 'MANUAL') {
+        const activeItems = (sec.items || []).filter(i => i.active);
+        if (activeItems.length === 0) {
+          errors.push("No manual categories selected");
+        } else if (activeItems.length > 6) {
+          errors.push(`Maximum 6 categories allowed (currently has ${activeItems.length})`);
+        } else {
+          for (const item of activeItems) {
+            if (item.itemType !== 'category') {
+              errors.push(`Incompatible item type "${item.itemType}". Only category items are allowed in Best Sellers.`);
+            }
+          }
+        }
+      }
+    } else if (['hero_banner', 'hero_carousel', 'featured_banner', 'featured_this_week'].includes(sec.type)) {
+      const activeItems = (sec.items || []).filter(i => i.active);
+      for (const item of activeItems) {
+        if (item.itemType !== 'banner') {
+          errors.push(`Incompatible item type "${item.itemType}". Only banner items are allowed in ${sec.title || sec.type}.`);
+        } else {
+          const banner = availableBanners.find(b => b._id === item.referenceId);
+          if (!banner) {
+            errors.push(`Banner reference ${item.referenceId} does not exist`);
+          }
+        }
+      }
+    } else if (sec.type === 'store_spotlight') {
+      const activeItems = (sec.items || []).filter(i => i.active);
+      if (activeItems.length > 10) {
+        errors.push(`Maximum 10 stores allowed (currently has ${activeItems.length})`);
+      }
+      for (const item of activeItems) {
+        if (item.itemType !== 'store') {
+          errors.push(`Incompatible item type "${item.itemType}". Only store items are allowed in Store Spotlight.`);
+        } else {
+          const store = availableStores.find(s => s._id === item.referenceId);
+          if (!store) {
+            errors.push(`Store reference ${item.referenceId} does not exist`);
+          }
+        }
+      }
+    } else if (['offer', 'offer_section'].includes(sec.type)) {
+      const activeItems = (sec.items || []).filter(i => i.active);
+      for (const item of activeItems) {
+        if (item.itemType !== 'offer' && item.itemType !== 'banner') {
+          errors.push(`Incompatible item type "${item.itemType}". Only offer items are allowed.`);
         }
       }
     } else {
@@ -298,37 +375,50 @@ export default function AdminHomeBuilderClient() {
   const getManuallySelectableCategories = () => {
     if (!draftConfig || selectedSectionIdx >= draftConfig.sections.length) return [];
     const sec = draftConfig.sections[selectedSectionIdx];
-    if (!sec.sourceCategoryId) return [];
-    return availableCategories.filter(c => {
-      const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
-      return pId === sec.sourceCategoryId;
+    if (!sec.sourceCategoryId) return availableCategories;
+    
+    // Sort child categories of sourceCategoryId first, followed by other categories
+    return [...availableCategories].sort((a, b) => {
+      const aParentId = typeof a.parentCategory === 'object' ? a.parentCategory?._id : a.parentCategory;
+      const bParentId = typeof b.parentCategory === 'object' ? b.parentCategory?._id : b.parentCategory;
+      const aIsChild = aParentId && String(aParentId) === String(sec.sourceCategoryId) ? 1 : 0;
+      const bIsChild = bParentId && String(bParentId) === String(sec.sourceCategoryId) ? 1 : 0;
+      if (aIsChild !== bIsChild) return bIsChild - aIsChild;
+      return (a.name || '').localeCompare(b.name || '');
     });
   };
 
   const getManuallySelectableProducts = () => {
-    if (!draftConfig || selectedSectionIdx >= draftConfig.sections.length) return [];
+    if (!draftConfig || selectedSectionIdx >= draftConfig.sections.length) return availableProducts;
     const sec = draftConfig.sections[selectedSectionIdx];
-    if (!sec.sourceCategoryId) return [];
+    if (!sec?.sourceCategoryId) return availableProducts;
 
-    const descendants = new Set<string>();
-    descendants.add(sec.sourceCategoryId);
-    
-    availableCategories.forEach(c => {
-      const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
-      if (pId === sec.sourceCategoryId) {
-        descendants.add(c._id);
-        availableCategories.forEach(child => {
-          const cpId = typeof child.parentCategory === 'object' ? child.parentCategory?._id : child.parentCategory;
-          if (cpId === child._id) {
-            descendants.add(child._id);
-          }
-        });
-      }
-    });
+    const getDescendantIds = (catId: string): string[] => {
+      const children = availableCategories.filter((c: any) => {
+        const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
+        return pId && String(pId) === String(catId);
+      });
+      return [String(catId), ...children.flatMap((c: any) => getDescendantIds(c._id))];
+    };
 
-    return availableProducts.filter(p => {
-      const pCatId = typeof p.category === 'object' ? p.category?._id : p.category;
-      return descendants.has(pCatId || '');
+    const descendantIds = new Set(getDescendantIds(sec.sourceCategoryId).map(String));
+    const descendantSlugs = new Set(
+      availableCategories
+        .filter((c: any) => descendantIds.has(String(c._id)))
+        .map((c: any) => c.slug)
+        .filter(Boolean)
+    );
+
+    return [...availableProducts].sort((a, b) => {
+      const aCatId = String((typeof a.category === 'object' ? a.category?._id : a.category) || a.categoryId || '');
+      const bCatId = String((typeof b.category === 'object' ? b.category?._id : b.category) || b.categoryId || '');
+      const aCatSlug = String(a.categorySlug || (typeof a.category === 'object' ? a.category?.slug : '') || '');
+      const bCatSlug = String(b.categorySlug || (typeof b.category === 'object' ? b.category?.slug : '') || '');
+
+      const aIsDesc = (descendantIds.has(aCatId) || descendantSlugs.has(aCatSlug) || descendantSlugs.has(aCatId)) ? 1 : 0;
+      const bIsDesc = (descendantIds.has(bCatId) || descendantSlugs.has(bCatSlug) || descendantSlugs.has(bCatId)) ? 1 : 0;
+      if (aIsDesc !== bIsDesc) return bIsDesc - aIsDesc;
+      return (a.name || '').localeCompare(b.name || '');
     });
   };
 
@@ -346,13 +436,13 @@ export default function AdminHomeBuilderClient() {
         fetch(`${apiBase}/admin/categories?limit=1000`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }),
-        fetch(`${apiBase}/admin/products?limit=100`, {
+        fetch(`${apiBase}/admin/products?limit=1000`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }),
         fetch(`${apiBase}/admin/hero-banners`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }),
-        fetch(`${apiBase}/admin/stores`, {
+        fetch(`${apiBase}/admin/stores?limit=100`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }),
       ]);
@@ -376,7 +466,7 @@ export default function AdminHomeBuilderClient() {
       }
       if (storesRes.ok) {
         const s = await storesRes.json();
-        setAvailableStores(s.data || []);
+        setAvailableStores(s.data?.stores || s.data?.items || (Array.isArray(s.data) ? s.data : []));
       }
     } catch (err: any) {
       setStatusMessage({ type: "error", text: err.message || "Failed to load draft configuration." });
@@ -427,17 +517,35 @@ export default function AdminHomeBuilderClient() {
   }, [activeTab]);
 
   const getEligibleProductsForCategory = (catId: string): any[] => {
+    if (!catId) return [];
     const getDescendants = (id: string): string[] => {
       const children = availableCategories.filter((c: any) => {
         const parentId = c.parentCategory?._id || c.parentCategory;
-        return parentId && parentId.toString() === id.toString();
+        return parentId && String(parentId) === String(id);
       });
-      return [id, ...children.flatMap((c: any) => getDescendants(c._id))];
+      return [String(id), ...children.flatMap((c: any) => getDescendants(c._id))];
     };
-    const descendantIds = getDescendants(catId);
-    return availableProducts.filter((p: any) => {
-      const pCatId = p.category?._id || p.category;
-      return pCatId && descendantIds.includes(pCatId.toString());
+    const descendantIds = getDescendants(catId).map(String);
+    const descendantSlugs = new Set(
+      availableCategories
+        .filter((c: any) => descendantIds.includes(String(c._id)))
+        .map((c: any) => c.slug)
+        .filter(Boolean)
+    );
+
+    const matched = availableProducts.filter((p: any) => {
+      const pCatId = String(p.category?._id || p.category || "");
+      const pCatSlug = String(p.categorySlug || (typeof p.category === "object" ? p.category?.slug : "") || "");
+      return (
+        descendantIds.includes(pCatId) ||
+        descendantSlugs.has(pCatSlug) ||
+        descendantSlugs.has(pCatId)
+      );
+    });
+    return matched.length > 0 ? matched : availableProducts.filter((p: any) => {
+      const pCatId = String(p.category?._id || p.category || "");
+      const pCatSlug = String(p.categorySlug || (typeof p.category === "object" ? p.category?.slug : "") || "");
+      return descendantIds.includes(pCatId) || descendantSlugs.has(pCatSlug) || descendantSlugs.has(pCatId);
     });
   };
 
@@ -510,12 +618,33 @@ export default function AdminHomeBuilderClient() {
   };
 
   const handlePublish = async () => {
+    if (!draftConfig) return;
     setPublishing(true);
     setStatusMessage(null);
     try {
       const token = session?.accessToken;
       const apiBase = getApiBaseUrl();
 
+      // 1. Automatically save current draft state to backend first
+      const saveRes = await fetch(`${apiBase}/admin/home-config/draft`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          scopeType: draftConfig.scopeType,
+          expectedVersion: draftConfig.configVersion,
+          sections: draftConfig.sections,
+        }),
+      });
+
+      const saveJson = await saveRes.json();
+      if (!saveRes.ok) {
+        throw new Error(saveJson.message || "Failed to save draft before publishing.");
+      }
+
+      // 2. Publish the saved draft
       const res = await fetch(`${apiBase}/admin/home-config/publish`, {
         method: "POST",
         headers: {
@@ -523,7 +652,7 @@ export default function AdminHomeBuilderClient() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          scopeType: draftConfig?.scopeType || "GLOBAL",
+          scopeType: draftConfig.scopeType || "GLOBAL",
         }),
       });
 
@@ -533,11 +662,12 @@ export default function AdminHomeBuilderClient() {
       }
 
       setPublishModalOpen(false);
+      broadcastHomeConfigUpdate();
       setStatusMessage({
         type: "success",
         text: `Configuration v${resJson.data.published.configVersion} published to live customer app!`,
       });
-      fetchDraft();
+      await fetchDraft();
     } catch (err: any) {
       setStatusMessage({ type: "error", text: err.message || "Publish failed." });
     } finally {
@@ -714,6 +844,27 @@ export default function AdminHomeBuilderClient() {
       item.sortOrder = idx + 1;
     });
     setDraftConfig({ ...draftConfig, sections: updatedSections });
+  };
+
+  const handleClearAllItems = () => {
+    if (!draftConfig || selectedSectionIdx >= draftConfig.sections.length) return;
+    const updatedSections = [...draftConfig.sections];
+    updatedSections[selectedSectionIdx].items = [];
+    setDraftConfig({ ...draftConfig, sections: updatedSections });
+  };
+
+  const handleRemoveIncompatibleItems = () => {
+    if (!draftConfig || selectedSectionIdx >= draftConfig.sections.length) return;
+    const currentSec = draftConfig.sections[selectedSectionIdx];
+    const allowed = ALLOWED_ITEM_TYPES_FOR_SECTION[currentSec.type] || [];
+    const filteredItems = (currentSec.items || []).filter((item) => allowed.includes(item.itemType));
+    filteredItems.forEach((item, idx) => {
+      item.sortOrder = idx + 1;
+    });
+    const updatedSections = [...draftConfig.sections];
+    updatedSections[selectedSectionIdx].items = filteredItems;
+    setDraftConfig({ ...draftConfig, sections: updatedSections });
+    setStatusMessage({ type: "success", text: "Incompatible items removed from section." });
   };
 
   const currentSection = draftConfig?.sections[selectedSectionIdx];
@@ -1018,19 +1169,23 @@ export default function AdminHomeBuilderClient() {
                     <label className="text-[11px] font-black uppercase text-[var(--text-muted)]">
                       Selection Mode
                     </label>
-                    {["category_grid", "product_grid"].includes(currentSectionType) ? (
+                    {["category_grid", "product_grid", "best_sellers", "best_seller_grid"].includes(currentSectionType) ? (
                       <select
                         value={(currentSection as any).selectionMode || (currentSection.items && currentSection.items.length > 0 ? "MANUAL" : "AUTOMATIC")}
                         onChange={(e: any) => {
                           const updated = [...draftConfig.sections];
                           const sec = updated[selectedSectionIdx] as any;
                           sec.selectionMode = e.target.value;
-                          sec.itemMode = e.target.value === "MANUAL" ? "MANUAL" : "CATEGORY";
+                          if (["best_sellers", "best_seller_grid"].includes(currentSectionType)) {
+                            sec.itemMode = "BEST_SELLING";
+                          } else {
+                            sec.itemMode = e.target.value === "MANUAL" ? "MANUAL" : "CATEGORY";
+                          }
                           setDraftConfig({ ...draftConfig, sections: updated });
                         }}
                         className="mt-1 h-10 w-full rounded-xl border border-[var(--border)] px-3 text-xs font-bold focus:border-[var(--primary)] focus:outline-none bg-white"
                       >
-                        <option value="AUTOMATIC">Auto (Deterministic Category children/products)</option>
+                        <option value="AUTOMATIC">Auto (Deterministic Categories/Products)</option>
                         <option value="MANUAL">Manual curated selection</option>
                       </select>
                     ) : (
@@ -1167,32 +1322,31 @@ export default function AdminHomeBuilderClient() {
                           : currentSection.type;
 
                         if (sectionType === 'category_grid') {
-                          // Find children
                           const sourceId = currentSection.sourceCategoryId;
-                          const children = availableCategories.filter(c => {
+                          if (!sourceId) {
+                            return (
+                              <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-rose-600 bg-rose-50/30">
+                                Please select a Source Category above to resolve child categories.
+                              </div>
+                            );
+                          }
+
+                          const children = availableCategories.filter((c: any) => {
                             const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
-                            return pId === sourceId;
+                            return pId && String(pId) === String(sourceId);
                           }).sort((a, b) => {
                             if ((a.sortOrder || 0) !== (b.sortOrder || 0)) return (a.sortOrder || 0) - (b.sortOrder || 0);
                             if ((a.displayOrder || 0) !== (b.displayOrder || 0)) return (a.displayOrder || 0) - (b.displayOrder || 0);
-                            return a.name.localeCompare(b.name);
+                            return (a.name || '').localeCompare(b.name || '');
                           });
 
                           const limit = ((currentSection as any).rowCount || 1) * 4;
                           const displayChildren = children.slice(0, limit);
 
-                          if (!sourceId) {
-                            return (
-                              <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-rose-600 bg-rose-50/30">
-                                Please select a Source Category to resolve child categories.
-                              </div>
-                            );
-                          }
-
                           if (displayChildren.length === 0) {
                             return (
                               <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-amber-600 bg-amber-50/30">
-                                No child categories found for the selected Source Category.
+                                No direct child categories found for this Source Category. (Tip: If this is a leaf category, switch to a Product Grid section or select a parent category).
                               </div>
                             );
                           }
@@ -1249,45 +1403,30 @@ export default function AdminHomeBuilderClient() {
                           if (!sourceId) {
                             return (
                               <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-rose-600 bg-rose-50/30">
-                                Please select a Source Category to resolve products.
+                                Please select a Source Category above to resolve products.
                               </div>
                             );
                           }
 
-                          const descendants = new Set<string>();
-                          descendants.add(sourceId);
-                          availableCategories.forEach(c => {
-                            const pId = typeof c.parentCategory === 'object' ? c.parentCategory?._id : c.parentCategory;
-                            if (pId === sourceId) {
-                              descendants.add(c._id);
-                              availableCategories.forEach(child => {
-                                const cpId = typeof child.parentCategory === 'object' ? child.parentCategory?._id : child.parentCategory;
-                                if (cpId === child._id) {
-                                  descendants.add(child._id);
-                                }
-                              });
-                            }
-                          });
+                          const eligible = getEligibleProductsForCategory(sourceId);
+                          const resolvedProducts = eligible
+                            .sort((a: any, b: any) => {
+                              const aBest = a.bestseller || a.isBestseller ? 1 : 0;
+                              const bBest = b.bestseller || b.isBestseller ? 1 : 0;
+                              if (aBest !== bBest) return bBest - aBest;
 
-                          const resolvedProducts = availableProducts.filter(p => {
-                            const pCatId = typeof p.category === 'object' ? p.category?._id : p.category;
-                            return descendants.has(pCatId || '');
-                          }).sort((a, b) => {
-                            const aBest = a.bestseller || (a as any).isBestseller ? 1 : 0;
-                            const bBest = b.bestseller || (b as any).isBestseller ? 1 : 0;
-                            if (aBest !== bBest) return bBest - aBest;
+                              const aFeat = a.featured || a.isFeatured ? 1 : 0;
+                              const bFeat = b.featured || b.isFeatured ? 1 : 0;
+                              if (aFeat !== bFeat) return bFeat - aFeat;
 
-                            const aFeat = a.featured || (a as any).isFeatured ? 1 : 0;
-                            const bFeat = b.featured || (b as any).isFeatured ? 1 : 0;
-                            if (aFeat !== bFeat) return bFeat - aFeat;
-
-                            return (a.displayOrder || 0) - (b.displayOrder || 0);
-                          }).slice(0, 6);
+                              return (a.displayOrder || 0) - (b.displayOrder || 0);
+                            })
+                            .slice(0, 6);
 
                           if (resolvedProducts.length === 0) {
                             return (
                               <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-amber-600 bg-amber-50/30">
-                                No products found in this category hierarchy.
+                                No products found in this category or its child categories.
                               </div>
                             );
                           }
@@ -1298,15 +1437,123 @@ export default function AdminHomeBuilderClient() {
                                 Resolving top products (Bestseller → Featured → Sort Order):
                               </p>
                               <div className="grid grid-cols-2 gap-2">
-                                {resolvedProducts.map((prod, idx) => (
-                                  <div key={prod._id} className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-3 bg-gray-50/50">
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white border border-[var(--border)] text-[10px] font-black">
-                                      {idx + 1}
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-bold truncate">{prod.name}</p>
-                                      <p className="text-[10px] text-emerald-700 font-bold mt-0.5">₹{prod.sellingPrice}</p>
+                                {resolvedProducts.map((prod: any, idx: number) => {
+                                  const imgSrc = prod.thumbnail || prod.image || "/images/placeholder.png";
+                                  return (
+                                    <div key={prod._id || idx} className="flex items-center gap-3 rounded-xl border border-[var(--border)] p-2.5 bg-gray-50/50">
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white border border-[var(--border)] text-[10px] font-black">
+                                        {idx + 1}
+                                      </span>
+                                      <div className="h-9 w-9 rounded-lg bg-white border border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                                        <img src={imgSrc} alt={prod.name} className="h-full w-full object-contain p-0.5" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-bold truncate">{prod.name}</p>
+                                        <p className="text-[10px] text-emerald-700 font-bold mt-0.5">₹{prod.sellingPrice ?? prod.price ?? 0}</p>
+                                      </div>
                                     </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        } else if (['best_sellers', 'best_seller_grid'].includes(sectionType)) {
+                          const categoriesToShow = currentSection.items && currentSection.items.length > 0
+                            ? currentSection.items
+                                .filter((i) => i.active && i.itemType === 'category')
+                                .map((item) => {
+                                  const cat = availableCategories.find((c) => String(c._id) === String(item.referenceId));
+                                  const prods = item.displayProductIds?.length
+                                    ? item.displayProductIds.map((pId) => availableProducts.find((p) => String(p._id) === String(pId))).filter(Boolean)
+                                    : getEligibleProductsForCategory(item.referenceId).slice(0, 4);
+                                  return {
+                                    name: cat?.name || item.label || 'Category',
+                                    products: prods,
+                                  };
+                                })
+                            : availableCategories
+                                .filter((c: any) => !c.parentCategory || c.level === 1 || c.level === 2)
+                                .slice(0, 6)
+                                .map((cat: any) => ({
+                                  name: cat.name,
+                                  products: getEligibleProductsForCategory(cat._id).slice(0, 4),
+                                }));
+
+                          if (categoriesToShow.length === 0) {
+                            return (
+                              <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-amber-600 bg-amber-50/30">
+                                No categories available for Best Sellers. Click &quot;Add Item&quot; to pick top categories.
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="space-y-3">
+                              <p className="text-[10px] text-[var(--text-muted)] font-bold">
+                                Resolving Best Seller Categories (Each shows 4 quadrant product previews):
+                              </p>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                {categoriesToShow.map((item, idx) => (
+                                  <div key={idx} className="rounded-xl border border-[var(--border)] p-2.5 bg-gray-50/60 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-black truncate">{item.name}</span>
+                                      <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-100">
+                                        {item.products.length}/4 Prods
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1">
+                                      {item.products.slice(0, 4).map((p: any, pIdx: number) => {
+                                        const imgSrc = p?.thumbnail || p?.image || "/images/placeholder.png";
+                                        return (
+                                          <div key={pIdx} className="aspect-square bg-white rounded-lg border border-gray-100 flex items-center justify-center p-1 overflow-hidden" title={p?.name}>
+                                            <img src={imgSrc} alt={p?.name || ""} className="h-8 w-8 object-contain" />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        } else if (['hero_carousel', 'hero_banner', 'featured_this_week', 'featured_banner'].includes(sectionType)) {
+                          const banners = availableBanners.filter((b) => b.active !== false).slice(0, 6);
+                          if (banners.length === 0) {
+                            return (
+                              <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-gray-500">
+                                No active banners found in the banner registry.
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="space-y-2">
+                              <p className="text-[10px] text-[var(--text-muted)] font-bold">Resolving active banners:</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {banners.map((b, idx) => (
+                                  <div key={b._id || idx} className="rounded-xl border border-[var(--border)] p-2.5 bg-gray-50/50">
+                                    <p className="text-xs font-bold truncate">{b.title}</p>
+                                    <p className="text-[10px] text-gray-500 mt-0.5">{b.placement || "hero"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        } else if (['offer_section', 'offer'].includes(sectionType)) {
+                          return (
+                            <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/30 p-6 text-center text-xs text-emerald-800 font-bold">
+                              Default active offer promotions will be resolved automatically on the home page.
+                            </div>
+                          );
+                        } else if (['store_spotlight'].includes(sectionType)) {
+                          const stores = availableStores.filter((s) => s.active !== false).slice(0, 6);
+                          return (
+                            <div className="space-y-2">
+                              <p className="text-[10px] text-[var(--text-muted)] font-bold">Resolving active verified stores:</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {stores.map((s, idx) => (
+                                  <div key={s._id || idx} className="rounded-xl border border-[var(--border)] p-2.5 bg-gray-50/50">
+                                    <p className="text-xs font-bold truncate">{s.name}</p>
+                                    <p className="text-[10px] text-gray-500 mt-0.5">{s.city || "All Stores"}</p>
                                   </div>
                                 ))}
                               </div>
@@ -1327,55 +1574,108 @@ export default function AdminHomeBuilderClient() {
                         <h4 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)]">
                           Curated Section Items ({currentSection.items.length})
                         </h4>
-                        {currentSection.items.length < (currentSectionType === 'product_grid' ? 6 : (((currentSection as any).rowCount || 1) * 4)) ||
-                        !["best_sellers", "best_seller_grid", "category_grid", "product_grid"].includes(currentSectionType) ? (
-                          <button
-                            onClick={() => setShowAddItemModal(true)}
-                            className="flex h-8 items-center gap-1 rounded-lg bg-[var(--primary)] px-2.5 text-xs font-bold text-white hover:opacity-90 transition"
-                          >
-                            <Plus size={14} /> Add Item
-                          </button>
-                        ) : (
-                          <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">
-                            Max Items Reached
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {currentSection.items.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to remove all items from this section?")) {
+                                  handleClearAllItems();
+                                }
+                              }}
+                              className="flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
+                              title="Remove all items from this section"
+                            >
+                              <Trash2 size={13} /> Remove All
+                            </button>
+                          )}
+                          {currentSection.items.length < (["best_sellers", "best_seller_grid"].includes(currentSectionType) ? 12 : currentSectionType === 'product_grid' ? 12 : (((currentSection as any).rowCount || 2) * 4)) ||
+                          !["best_sellers", "best_seller_grid", "category_grid", "product_grid"].includes(currentSectionType) ? (
+                            <button
+                              onClick={() => {
+                                setAddItemSearch("");
+                                setShowAddItemModal(true);
+                              }}
+                              className="flex h-8 items-center gap-1 rounded-lg bg-[var(--primary)] px-2.5 text-xs font-bold text-white hover:opacity-90 transition"
+                            >
+                              <Plus size={14} /> Add Item
+                            </button>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1">
+                              Max Items Reached
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {currentSection.items.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-[var(--border)] p-8 text-center text-xs text-[var(--text-muted)]">
-                          No items attached to this section yet. Click &quot;Add Item&quot; to pick products, categories, or banners.
+                        <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/50 p-6 text-center text-xs text-amber-800 space-y-1">
+                          <p className="font-bold">⚠️ No curated items configured in Manual Mode</p>
+                          <p className="text-[11px] text-amber-700">
+                            Click &quot;+ Add Item&quot; to pick {["best_sellers", "best_seller_grid"].includes(currentSectionType) ? "categories (1 to 6)" : currentSection.type === "store_spotlight" ? "stores (1 to 10)" : ["hero_banner", "featured_banner", "hero_carousel", "featured_this_week"].includes(currentSection.type) ? "banners (1 to 10)" : "items"}, or switch Selection Mode to &quot;Auto&quot;.
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-2">
-                          {currentSection.items.map((item, itemIdx) => (
-                            <div
-                              key={`${item.referenceId}-${itemIdx}`}
-                              className="flex flex-col rounded-xl border border-[var(--border)] bg-gray-50/60 p-3 space-y-2"
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-[10px] font-black border border-[var(--border)]">
-                                    {itemIdx + 1}
-                                  </span>
-                                  <div>
-                                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-black uppercase text-[var(--primary)] border border-emerald-200">
-                                      {item.itemType}
-                                    </span>
-                                    <p className="text-xs font-bold mt-0.5">
-                                      {item.label || availableCategories.find(c => c._id === item.referenceId)?.name || item.referenceId}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <button
-                                  onClick={() => handleRemoveItem(itemIdx)}
-                                  className="rounded p-1 text-rose-600 hover:bg-rose-50"
-                                  title="Remove Item"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                          {currentSection.items.some((i) => isItemIncompatible(currentSection.type, i.itemType)) && (
+                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 flex items-center justify-between">
+                              <div>
+                                <p className="font-bold">⚠️ Incompatible Items Detected</p>
+                                <p className="text-[11px] text-rose-700">
+                                  Allowed item type: &quot;{ALLOWED_ITEM_TYPES_FOR_SECTION[currentSection.type]?.join(", ")}&quot;. Remove incompatible items to save or publish.
+                                </p>
                               </div>
+                              <button
+                                type="button"
+                                onClick={handleRemoveIncompatibleItems}
+                                className="rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-rose-700 transition flex-shrink-0"
+                              >
+                                Remove Incompatible
+                              </button>
+                            </div>
+                          )}
+
+                          {currentSection.items.map((item, itemIdx) => {
+                            const incompatible = isItemIncompatible(currentSection.type, item.itemType);
+                            return (
+                              <div
+                                key={`${item.referenceId}-${itemIdx}`}
+                                className={`flex flex-col rounded-xl border p-3 space-y-2 ${
+                                  incompatible ? "border-rose-300 bg-rose-50/60" : "border-[var(--border)] bg-gray-50/60"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-[10px] font-black border border-[var(--border)]">
+                                      {itemIdx + 1}
+                                    </span>
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase border ${
+                                          incompatible ? "bg-rose-100 text-rose-800 border-rose-300" : "bg-white text-[var(--primary)] border-emerald-200"
+                                        }`}>
+                                          {item.itemType}
+                                        </span>
+                                        {incompatible && (
+                                          <span className="rounded bg-rose-200 px-1.5 py-0.5 text-[9px] font-black uppercase text-rose-800 border border-rose-300">
+                                            ⚠️ Incompatible
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs font-bold mt-0.5">
+                                        {getItemLabel(item)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    onClick={() => handleRemoveItem(itemIdx)}
+                                    className="rounded p-1 text-rose-600 hover:bg-rose-50"
+                                    title="Remove Item"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
 
                               {item.itemType === "category" &&
                                 ["best_sellers", "best_seller_grid"].includes(currentSection.type) && (
@@ -1450,8 +1750,9 @@ export default function AdminHomeBuilderClient() {
                                     )}
                                   </div>
                                 )}
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </>
@@ -1589,67 +1890,167 @@ export default function AdminHomeBuilderClient() {
               </button>
             </div>
 
+            <div>
+              <input
+                type="text"
+                placeholder="Search items by name..."
+                value={addItemSearch}
+                onChange={(e) => setAddItemSearch(e.target.value)}
+                className="h-9 w-full rounded-xl border border-[var(--border)] px-3 text-xs font-bold focus:border-[var(--primary)] focus:outline-none"
+              />
+            </div>
+
             <div className="flex-1 overflow-y-auto space-y-4 pr-1">
               {/* Category Picker */}
-              {(currentSection.type === "category_grid" ||
-                !["product_grid", "hero_carousel", "hero_banner", "offer_section", "offer", "store_spotlight"].includes(currentSection.type)) && (
+              {ALLOWED_ITEM_TYPES_FOR_SECTION[currentSection.type]?.includes("category") && (
                 <div>
                   <h4 className="text-xs font-black uppercase text-[var(--text-muted)] mb-2">Categories</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(currentSection.type === "category_grid"
-                      ? getManuallySelectableCategories()
-                      : availableCategories
-                    ).map((cat) => (
-                      <button
-                        key={cat._id}
-                        onClick={() => handleAddItemToSection("category", cat._id, cat.name)}
-                        className="rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50"
-                      >
-                        {cat.name}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {(() => {
+                      const cats = (currentSection.type === "category_grid"
+                        ? getManuallySelectableCategories()
+                        : availableCategories
+                      ).filter((cat) =>
+                        !addItemSearch || (cat.name && cat.name.toLowerCase().includes(addItemSearch.toLowerCase()))
+                      );
+
+                      if (cats.length === 0) {
+                        return (
+                          <div className="col-span-2 rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-500">
+                            {availableCategories.length === 0
+                              ? "No categories available."
+                              : "No categories matched your search."}
+                          </div>
+                        );
+                      }
+
+                      return cats.map((cat) => (
+                        <button
+                          key={cat._id}
+                          onClick={() => handleAddItemToSection("category", cat._id, cat.name)}
+                          className="rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50 transition"
+                        >
+                          {cat.name}
+                        </button>
+                      ));
+                    })()}
                   </div>
                 </div>
               )}
 
               {/* Product Picker */}
-              {(currentSection.type === "product_grid" ||
-                !["category_grid", "hero_carousel", "hero_banner", "offer_section", "offer", "store_spotlight"].includes(currentSection.type)) && (
-                <div className="border-t border-[var(--border)] pt-3">
+              {ALLOWED_ITEM_TYPES_FOR_SECTION[currentSection.type]?.includes("product") && (
+                <div>
                   <h4 className="text-xs font-black uppercase text-[var(--text-muted)] mb-2">Products</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(currentSection.type === "product_grid"
-                      ? getManuallySelectableProducts()
-                      : availableProducts
-                    ).map((prod) => (
-                      <button
-                        key={prod._id}
-                        onClick={() => handleAddItemToSection("product", prod._id, prod.name)}
-                        className="rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50"
-                      >
-                        <p className="truncate">{prod.name}</p>
-                        <span className="text-[10px] text-emerald-700 font-bold">₹{prod.sellingPrice}</span>
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {(() => {
+                      const prods = (currentSection.type === "product_grid"
+                        ? getManuallySelectableProducts()
+                        : availableProducts
+                      ).filter((prod) =>
+                        !addItemSearch || (prod.name && prod.name.toLowerCase().includes(addItemSearch.toLowerCase()))
+                      );
+
+                      if (prods.length === 0) {
+                        return (
+                          <div className="col-span-2 rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-500">
+                            {availableProducts.length === 0
+                              ? "No products available in the catalog."
+                              : "No products matched your search."}
+                          </div>
+                        );
+                      }
+
+                      return prods.map((prod) => (
+                        <button
+                          key={prod._id}
+                          onClick={() => handleAddItemToSection("product", prod._id, prod.name)}
+                          className="rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50 transition"
+                        >
+                          <p className="truncate">{prod.name}</p>
+                          <span className="text-[10px] text-emerald-700 font-bold">₹{prod.sellingPrice}</span>
+                        </button>
+                      ));
+                    })()}
                   </div>
                 </div>
               )}
 
               {/* Banner Picker */}
-              {!["category_grid", "product_grid"].includes(currentSection.type) && (
-                <div className="border-t border-[var(--border)] pt-3">
-                  <h4 className="text-xs font-black uppercase text-[var(--text-muted)] mb-2">Hero Banners</h4>
-                  <div className="space-y-1.5">
-                    {availableBanners.slice(0, 6).map((banner) => (
-                      <button
-                        key={banner._id}
-                        onClick={() => handleAddItemToSection("banner", banner._id, banner.title)}
-                        className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50"
-                      >
-                        <span>{banner.title}</span>
-                        <span className="text-[10px] font-mono text-[var(--text-muted)]">{banner.placement}</span>
-                      </button>
-                    ))}
+              {ALLOWED_ITEM_TYPES_FOR_SECTION[currentSection.type]?.includes("banner") && (
+                <div>
+                  <h4 className="text-xs font-black uppercase text-[var(--text-muted)] mb-2">Banners</h4>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {(() => {
+                      const banners = (availableBanners || []).filter((b) =>
+                        !addItemSearch || (b.title && b.title.toLowerCase().includes(addItemSearch.toLowerCase()))
+                      );
+
+                      if (banners.length === 0) {
+                        return (
+                          <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-500">
+                            {availableBanners.length === 0
+                              ? "No banners available in database."
+                              : "No banners matched your search."}
+                          </div>
+                        );
+                      }
+
+                      return banners.slice(0, 20).map((banner) => (
+                        <button
+                          key={banner._id}
+                          onClick={() => handleAddItemToSection("banner", banner._id, banner.title)}
+                          className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] p-2 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50 transition"
+                        >
+                          <span>{banner.title}</span>
+                          <span className="text-[10px] font-mono text-[var(--text-muted)]">{banner.placement || "banner"}</span>
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Store Picker */}
+              {ALLOWED_ITEM_TYPES_FOR_SECTION[currentSection.type]?.includes("store") && (
+                <div>
+                  <h4 className="text-xs font-black uppercase text-[var(--text-muted)] mb-2">Stores</h4>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {(() => {
+                      const stores = (Array.isArray(availableStores) ? availableStores : []).filter((s) =>
+                        !addItemSearch ||
+                        (s.name && s.name.toLowerCase().includes(addItemSearch.toLowerCase())) ||
+                        (s.city && s.city.toLowerCase().includes(addItemSearch.toLowerCase()))
+                      );
+
+                      if (stores.length === 0) {
+                        return (
+                          <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-500">
+                            {availableStores.length === 0
+                              ? "No active stores found in database."
+                              : "No stores matched your search."}
+                          </div>
+                        );
+                      }
+
+                      return stores.slice(0, 20).map((store) => (
+                        <button
+                          key={store._id}
+                          onClick={() => handleAddItemToSection("store", store._id, store.name)}
+                          className="flex w-full items-center justify-between rounded-xl border border-[var(--border)] p-2.5 text-left text-xs font-bold hover:border-[var(--primary)] hover:bg-emerald-50 transition"
+                        >
+                          <div>
+                            <p className="font-bold text-xs">{store.name}</p>
+                            <p className="text-[10px] text-[var(--text-muted)]">
+                              {store.city ? `City: ${store.city}` : "Fast local fulfillment"}
+                            </p>
+                          </div>
+                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-800">
+                            + Select Store
+                          </span>
+                        </button>
+                      ));
+                    })()}
                   </div>
                 </div>
               )}

@@ -60,6 +60,9 @@ const emptyProfile: CustomerProfile = {
   phone: "",
   email: "",
   dateOfBirth: "",
+  gender: "",
+  avatar: "",
+  alternatePhone: "",
 };
 
 type SupabaseProfile = {
@@ -84,6 +87,10 @@ function readStoredProfile(): CustomerProfile {
       email: typeof parsed.email === "string" ? parsed.email : "",
       dateOfBirth:
         typeof parsed.dateOfBirth === "string" ? parsed.dateOfBirth : "",
+      gender: typeof parsed.gender === "string" ? parsed.gender : "",
+      avatar: typeof parsed.avatar === "string" ? parsed.avatar : "",
+      alternatePhone:
+        typeof parsed.alternatePhone === "string" ? parsed.alternatePhone : "",
     };
   } catch {
     return emptyProfile;

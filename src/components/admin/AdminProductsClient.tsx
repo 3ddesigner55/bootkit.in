@@ -1592,8 +1592,19 @@ function AdminProductCard({
       }`}
     >
       <div className="flex items-start gap-4 p-4">
-        <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[18px] bg-[var(--surface-soft)] text-[45px]">
-          {product.fallbackIcon}
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[18px] bg-[var(--surface-soft)] text-[45px] overflow-hidden border border-[var(--border)]">
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.name}
+              className="h-full w-full object-contain p-1"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+          ) : (
+            product.fallbackIcon || "📦"
+          )}
         </span>
 
         <div className="min-w-0 flex-1">

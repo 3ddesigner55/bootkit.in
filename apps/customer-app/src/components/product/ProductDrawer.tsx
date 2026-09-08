@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { X, Clock3, Star } from "lucide-react";
+import { safeImageUrl } from "@/lib/utils";
 import type { Product } from "@/types/product";
 
 interface ProductDrawerProps {
@@ -15,16 +17,21 @@ export default function ProductDrawer({
   product,
   onClose,
 }: ProductDrawerProps) {
+  const [imageError, setImageError] = useState(false);
+
   if (!open || !product) return null;
 
   const galleryImages = (product.images ?? []).filter(
     (image) => typeof image === "string" && image.trim() !== ""
   );
-  const imageSource =
+  const rawImage =
     galleryImages[0] ??
     (typeof product.image === "string" && product.image.trim() !== ""
       ? product.image
-      : null);
+      : typeof product.thumbnail === "string" && product.thumbnail.trim() !== ""
+        ? product.thumbnail
+        : "/images/placeholder.png");
+  const imageSource = safeImageUrl(rawImage);
 
   return (
     <>
@@ -70,17 +77,15 @@ export default function ProductDrawer({
 
             <div className="flex h-60 w-60 items-center justify-center rounded-3xl bg-[#f7f8fa]">
 
-              {imageSource ? (
-                <Image
-                  src={imageSource}
-                  alt={product.name}
-                  width={220}
-                  height={220}
-                  className="object-contain"
-                />
-              ) : (
-                <span className="text-7xl">{product.fallbackIcon}</span>
-              )}
+              <Image
+                src={imageError ? "/images/placeholder.png" : imageSource}
+                alt={product.name}
+                width={220}
+                height={220}
+                unoptimized={imageSource.startsWith("/")}
+                className="object-contain"
+                onError={() => setImageError(true)}
+              />
 
             </div>
 

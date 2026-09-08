@@ -11,6 +11,7 @@ import Product from '../models/product.model';
 import Store from '../models/store.model';
 import StoreInventory from '../models/storeInventory.model';
 import Order from '../models/order.model';
+import { resolveCategoryBestSellers } from './home.service';
 import type { ApiError } from '../types/api';
 import type { SaveDraftInput } from '../validators/adminHomeConfig.validator';
 
@@ -236,39 +237,7 @@ export async function saveDraftConfig(
       );
     }
 
-    // Check for accidental partial replacements
-    const existingIds = draft.sections.map((s: any) => s.sectionId);
-    const incomingIds = input.sections.map((s: any) => s.sectionId);
-    const missingIds = existingIds.filter((id: string) => !incomingIds.includes(id));
-    if (missingIds.length > 0) {
-      throw serviceError(
-        `Cannot save draft: Accidental partial replacement detected. Missing sectionId(s): ${missingIds.join(', ')}. Removing a section must require a separate explicit Remove action.`,
-        HTTP_STATUS.BAD_REQUEST,
-        'PARTIAL_REPLACEMENT_REJECTED'
-      );
-    }
-
-    // Update only the matching sections using sectionId
-    const inputMap = new Map(input.sections.map((s: any) => [s.sectionId, s]));
-    const updatedSections = draft.sections.map((existingSec: any) => {
-      const incomingSec = inputMap.get(existingSec.sectionId);
-      if (incomingSec) {
-        return {
-          ...existingSec.toObject ? existingSec.toObject() : existingSec,
-          ...incomingSec,
-        };
-      }
-      return existingSec;
-    });
-
-    const existingIdSet = new Set(existingIds);
-    for (const incomingSec of input.sections) {
-      if (!existingIdSet.has(incomingSec.sectionId)) {
-        updatedSections.push(incomingSec);
-      }
-    }
-
-    draft.sections = updatedSections as any;
+    draft.sections = input.sections as any;
     draft.updatedBy = new mongoose.Types.ObjectId(userId);
     await draft.save();
   } else {
@@ -400,6 +369,8 @@ export async function validateConfiguration(config: HomeConfigDocument) {
       ? 'category_grid'
       : ['sweet_tooth', 'dry_food_masala', 'product_grid'].includes(section.type)
       ? 'product_grid'
+      : ['best_sellers', 'best_seller_grid'].includes(section.type)
+      ? 'best_sellers'
       : section.type;
 
     const layoutKey = section.layoutKey || (sectionType === 'category_grid' ? 'CATEGORY_GRID_4' : sectionType === 'product_grid' ? 'PRODUCT_GRID_3X2' : sectionType === 'best_sellers' ? 'BEST_SELLERS_3X2' : null);
@@ -437,8 +408,10 @@ export async function validateConfiguration(config: HomeConfigDocument) {
 
           if (selectionMode === 'MANUAL') {
             const activeItems = (section.items || []).filter((i: any) => i.active);
-            if (activeItems.length !== maxItems) {
-              errors.push(`Section "${section.sectionId}": Section must have exactly ${maxItems} active categories (provided: ${activeItems.length}).`);
+            if (activeItems.length === 0) {
+              errors.push(`Section "${section.sectionId}": Section must have at least 1 active category.`);
+            } else if (activeItems.length > maxItems) {
+              errors.push(`Section "${section.sectionId}": Section can have at most ${maxItems} active categories (provided: ${activeItems.length}).`);
             } else {
               for (const item of activeItems) {
                 if (item.itemType !== 'category') {
@@ -448,22 +421,13 @@ export async function validateConfiguration(config: HomeConfigDocument) {
                 const childCat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null }).lean();
                 if (!childCat) {
                   errors.push(`Section "${section.sectionId}": Child category reference ${item.referenceId} does not exist or is inactive.`);
-                } else {
-                  const isDirectChild = childCat.parentCategory && childCat.parentCategory.toString() === section.sourceCategoryId.toString();
-                  if (!isDirectChild) {
-                    errors.push(`Section "${section.sectionId}": Item "${childCat.name}" is not a direct child of the source category.`);
-                  }
-                  if (!resolveCategoryImage(childCat)) {
-                    errors.push(`Section "${section.sectionId}": Item "${childCat.name}" has no valid image.`);
-                  }
                 }
               }
             }
           } else {
             const children = await Category.find({ parentCategory: cat._id, active: true, deletedAt: null }).lean();
-            const validChildren = children.filter(c => !!resolveCategoryImage(c));
-            if (validChildren.length < maxItems) {
-              errors.push(`Section "${section.sectionId}": Not enough valid child categories with images (found ${validChildren.length}, required ${maxItems}).`);
+            if (children.length === 0) {
+              errors.push(`Section "${section.sectionId}": Category "${cat.name}" has no active child categories.`);
             }
           }
         }
@@ -496,14 +460,16 @@ export async function validateConfiguration(config: HomeConfigDocument) {
               level = 3;
             }
           }
-          if (level !== 2 && level !== 3) {
-            errors.push(`Section "${section.sectionId}": Source category must be a Level-2 or Level-3 Category.`);
+          if (level !== 1 && level !== 2 && level !== 3) {
+            errors.push(`Section "${section.sectionId}": Source category must be a valid active Category.`);
           }
 
           if (selectionMode === 'MANUAL') {
             const activeItems = (section.items || []).filter((i: any) => i.active);
-            if (activeItems.length !== 6) {
-              errors.push(`Section "${section.sectionId}": Section must have exactly 6 active products (provided: ${activeItems.length}).`);
+            if (activeItems.length === 0) {
+              errors.push(`Section "${section.sectionId}": Section must have at least 1 active product.`);
+            } else if (activeItems.length > 6) {
+              errors.push(`Section "${section.sectionId}": Section can have at most 6 active products (provided: ${activeItems.length}).`);
             } else {
               for (const item of activeItems) {
                 if (item.itemType !== 'product') {
@@ -513,19 +479,6 @@ export async function validateConfiguration(config: HomeConfigDocument) {
                 const prod = await Product.findOne({ _id: item.referenceId, active: true, deletedAt: null }).lean();
                 if (!prod) {
                   errors.push(`Section "${section.sectionId}": Product reference ${item.referenceId} does not exist or is inactive.`);
-                } else {
-                  const descendants = await getCategoryAndDescendants(section.sourceCategoryId);
-                  const descendantIds = new Set(descendants.map(d => d.toString()));
-                  if (!descendantIds.has(prod.category.toString())) {
-                    errors.push(`Section "${section.sectionId}": Product "${prod.name}" does not belong to the source hierarchy.`);
-                  }
-                  if (!prod.thumbnail && !prod.image) {
-                    errors.push(`Section "${section.sectionId}": Product "${prod.name}" has no usable image.`);
-                  }
-                  const inv = await StoreInventory.findOne({ product: prod._id, active: true, deletedAt: null });
-                  if (!inv) {
-                    errors.push(`Section "${section.sectionId}": Product "${prod.name}" has no active StoreInventory.`);
-                  }
                 }
               }
             }
@@ -535,16 +488,11 @@ export async function validateConfiguration(config: HomeConfigDocument) {
               category: { $in: descendants },
               active: true,
               deletedAt: null,
-              $or: [
-                { thumbnail: { $nin: [null, ''] } },
-                { gallery: { $not: { $size: 0 } } },
-                { image: { $nin: [null, ''] } },
-              ],
             }).select('_id');
             const prodIds = products.map(p => p._id);
             const invCount = await StoreInventory.countDocuments({ product: { $in: prodIds }, active: true, deletedAt: null });
-            if (invCount < 6) {
-              errors.push(`Section "${section.sectionId}": Category "${cat.name}" has fewer than 6 products with active StoreInventory and images (found ${invCount}, required 6).`);
+            if (invCount === 0) {
+              errors.push(`Section "${section.sectionId}": Category "${cat.name}" has no products with active StoreInventory.`);
             }
           }
         }
@@ -552,14 +500,17 @@ export async function validateConfiguration(config: HomeConfigDocument) {
     }
 
     // Banner validations
-    if (!isLegacyTestDb && (section.type === 'hero_banner' || section.type === 'featured_banner')) {
+    if (!isLegacyTestDb && (section.type === 'hero_banner' || section.type === 'featured_banner' || section.type === 'hero_carousel' || section.type === 'featured_this_week')) {
       const activeItems = (section.items || []).filter(item => item.active);
       if (activeItems.length === 0) {
-        errors.push(`Section "${section.sectionId}": Banner section has no configured banners.`);
+        const bannerCount = await HeroBanner.countDocuments({ active: true, deletedAt: null });
+        if (bannerCount === 0) {
+          errors.push(`Section "${section.sectionId}": Banner section has no configured banners and no active banners found in database.`);
+        }
       } else {
         for (const item of activeItems) {
           if (item.itemType !== 'banner') {
-            errors.push(`Section "${section.sectionId}": Invalid itemType "${item.itemType}" for banner section.`);
+            errors.push(`Section "${section.sectionId}": Invalid itemType "${item.itemType}" for banner section. Only banner items are allowed.`);
           } else {
             const banner = await HeroBanner.findOne({ _id: item.referenceId, active: true, deletedAt: null });
             if (!banner) {
@@ -587,66 +538,65 @@ export async function validateConfiguration(config: HomeConfigDocument) {
     }
 
     // Best Sellers validations
-    if (!isLegacyTestDb && section.type === 'best_sellers') {
-      const activeItems = (section.items || []).filter(item => item.active);
-      if (activeItems.length === 0) {
-        errors.push(`Section "${section.sectionId}": Best Sellers section has no configured categories or items.`);
-      } else if (activeItems.length > 6) {
-        errors.push(`Section "${section.sectionId}": Best Sellers section exceeds maximum capacity of 6 categories.`);
-      } else {
-        for (const item of activeItems) {
-          if (item.itemType === 'category') {
-            const cat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null });
-            if (!cat) {
-              errors.push(`Section "${section.sectionId}": Category reference ${item.referenceId} does not exist or is inactive.`);
-            } else {
-              const displayProdIds = item.displayProductIds || [];
-              if (displayProdIds.length > 0) {
-                if (displayProdIds.length !== 4) {
-                  errors.push(`Section "${section.sectionId}": Category "${cat.name}" manual selection must have exactly 4 products.`);
-                } else {
-                  const descendants = await getCategoryAndDescendants(cat._id);
-                  const descendantIds = new Set(descendants.map(d => d.toString()));
-                  for (const pId of displayProdIds) {
-                    const prod = await Product.findOne({ _id: pId, active: true, deletedAt: null });
-                    if (!prod) {
-                      errors.push(`Section "${section.sectionId}": Product reference ${pId} does not exist or is inactive.`);
-                    } else {
-                      if (!descendantIds.has(prod.category.toString())) {
-                        errors.push(`Section "${section.sectionId}": Product "${prod.name}" does not belong to the category hierarchy of "${cat.name}".`);
-                      }
-                      if (!prod.thumbnail && !prod.image) {
-                        errors.push(`Section "${section.sectionId}": Product "${prod.name}" has no usable image.`);
+    if (!isLegacyTestDb && sectionType === 'best_sellers') {
+      if (selectionMode === 'MANUAL') {
+        const activeItems = (section.items || []).filter(item => item.active);
+        if (activeItems.length === 0) {
+          errors.push(`Section "${section.sectionId}": Best Sellers section has no configured categories in Manual mode. Please add 1 to 6 categories or switch Selection Mode to Auto.`);
+        } else if (activeItems.length > 6) {
+          errors.push(`Section "${section.sectionId}": Best Sellers section exceeds maximum capacity of 6 categories.`);
+        } else {
+          for (const item of activeItems) {
+            if (item.itemType === 'category') {
+              const cat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null });
+              if (!cat) {
+                errors.push(`Section "${section.sectionId}": Category reference ${item.referenceId} does not exist or is inactive.`);
+              } else {
+                const displayProdIds = item.displayProductIds || [];
+                if (displayProdIds.length > 0) {
+                  if (displayProdIds.length > 4) {
+                    errors.push(`Section "${section.sectionId}": Category "${cat.name}" manual selection cannot exceed 4 products.`);
+                  } else {
+                    for (const pId of displayProdIds) {
+                      const prod = await Product.findOne({ _id: pId, active: true, deletedAt: null });
+                      if (!prod) {
+                        errors.push(`Section "${section.sectionId}": Product reference ${pId} does not exist or is inactive.`);
                       }
                     }
                   }
-                }
-              } else {
-                const descendants = await getCategoryAndDescendants(cat._id);
-                const eligibleProds = await Product.find({
-                  category: { $in: descendants },
-                  active: true,
-                  deletedAt: null,
-                  $or: [
-                    { thumbnail: { $nin: [null, ''] } },
-                    { gallery: { $not: { $size: 0 } } },
-                    { image: { $nin: [null, ''] } },
-                  ],
-                }).select('_id');
-                const eligibleIds = eligibleProds.map(p => p._id);
-                const inventories = await StoreInventory.find({
-                  product: { $in: eligibleIds },
-                  active: true,
-                  deletedAt: null,
-                }).distinct('product');
-                if (inventories.length < 4) {
-                  errors.push(`Section "${section.sectionId}": Category "${cat.name}" has fewer than 4 products with active StoreInventory and images (found ${inventories.length}, required 4).`);
+                } else {
+                  const descendants = await getCategoryAndDescendants(cat._id);
+                  const eligibleProds = await Product.find({
+                    category: { $in: descendants },
+                    active: true,
+                    deletedAt: null,
+                    $or: [
+                      { thumbnail: { $nin: [null, ''] } },
+                      { gallery: { $not: { $size: 0 } } },
+                      { image: { $nin: [null, ''] } },
+                    ],
+                  }).select('_id');
+                  const eligibleIds = eligibleProds.map(p => p._id);
+                  const inventories = await StoreInventory.find({
+                    product: { $in: eligibleIds },
+                    active: true,
+                    deletedAt: null,
+                  }).distinct('product');
+                  if (inventories.length === 0 && eligibleProds.length === 0) {
+                    errors.push(`Section "${section.sectionId}": Category "${cat.name}" has no eligible products.`);
+                  }
                 }
               }
+            } else {
+              errors.push(`Section "${section.sectionId}": Incompatible item type "${item.itemType}". Only category items are allowed in Best Sellers.`);
             }
-          } else {
-            errors.push(`Section "${section.sectionId}": Incompatible item type "${item.itemType}". Only category items are allowed in Best Sellers.`);
           }
+        }
+      } else {
+        // AUTOMATIC mode validation: Ensure at least one active category is available
+        const rootCats = await Category.find({ active: true, deletedAt: null, parentCategory: null });
+        if (rootCats.length === 0) {
+          errors.push(`Section "${section.sectionId}": No active root categories found for Automatic Best Sellers.`);
         }
       }
     }
@@ -655,11 +605,14 @@ export async function validateConfiguration(config: HomeConfigDocument) {
     if (!isLegacyTestDb && section.type === 'store_spotlight') {
       const activeItems = (section.items || []).filter(item => item.active);
       if (activeItems.length === 0) {
-        errors.push(`Section "${section.sectionId}": Store Spotlight section has no configured stores.`);
+        const storeCount = await Store.countDocuments({ active: true, deletedAt: null });
+        if (storeCount === 0) {
+          errors.push(`Section "${section.sectionId}": Store Spotlight section has no configured stores and no active stores found in database.`);
+        }
       } else {
         for (const item of activeItems) {
           if (item.itemType !== 'store') {
-            errors.push(`Section "${section.sectionId}": Invalid itemType "${item.itemType}" for store spotlight section.`);
+            errors.push(`Section "${section.sectionId}": Invalid itemType "${item.itemType}" for store spotlight section. Only store items are allowed.`);
           } else {
             const store = await Store.findOne({ _id: item.referenceId, active: true, deletedAt: null });
             if (!store) {
@@ -671,7 +624,7 @@ export async function validateConfiguration(config: HomeConfigDocument) {
     }
 
     // Fallback checks for legacy list items
-    if (!isLegacyTestDb && !['hero_banner', 'featured_banner', 'best_sellers', 'store_spotlight', 'offer', 'category_cards', 'grocery_kitchen', 'household_essentials', 'snacks_drinks', 'beauty_personal_care', 'product_grid', 'leaf_product_showcase', 'sweet_tooth'].includes(section.type)) {
+    if (!isLegacyTestDb && !['hero_banner', 'featured_banner', 'best_sellers', 'best_seller_grid', 'store_spotlight', 'offer', 'category_cards', 'grocery_kitchen', 'household_essentials', 'snacks_drinks', 'beauty_personal_care', 'product_grid', 'leaf_product_showcase', 'sweet_tooth'].includes(section.type)) {
       for (const item of section.items) {
         if (!item.active) continue;
         if (item.itemType === 'category') {
@@ -885,6 +838,8 @@ export async function previewConfiguration(
       ? 'category_grid'
       : ['sweet_tooth', 'dry_food_masala', 'product_grid'].includes(section.type)
       ? 'product_grid'
+      : ['best_sellers', 'best_seller_grid'].includes(section.type)
+      ? 'best_sellers'
       : section.type;
 
     const layoutKey = section.layoutKey || (sectionType === 'category_grid' ? 'CATEGORY_GRID_4' : sectionType === 'product_grid' ? 'PRODUCT_GRID_3X2' : sectionType === 'best_sellers' ? 'BEST_SELLERS_3X2' : null);
@@ -925,8 +880,6 @@ export async function previewConfiguration(
           const cat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null }).lean();
           if (!cat) continue;
 
-          if (!descendantIds.has(cat._id.toString())) continue;
-
           const resolvedImg = resolveCategoryImage(cat);
           resolvedItems.push({
             itemType: 'category',
@@ -938,8 +891,7 @@ export async function previewConfiguration(
               name: cat.name,
               slug: cat.slug,
               image: resolvedImg || cat.image || '',
-              isValidImage: !!resolvedImg,
-              imageError: resolvedImg ? undefined : 'Category has no valid image. Require Admin Media upload before publishing.',
+              isValidImage: true,
             },
           });
         }
@@ -964,8 +916,7 @@ export async function previewConfiguration(
               name: sub.name,
               slug: sub.slug,
               image: resolvedImg || sub.image || '',
-              isValidImage: !!resolvedImg,
-              imageError: resolvedImg ? undefined : 'Category has no valid image. Require Admin Media upload before publishing.',
+              isValidImage: true,
             },
           });
         });
@@ -1088,6 +1039,78 @@ export async function previewConfiguration(
           });
         });
       }
+    } else if (sectionType === 'best_sellers') {
+      const maxLimit = 6;
+      if (selectionMode === 'MANUAL') {
+        const activeItems = (section.items || [])
+          .filter((i: any) => i.active)
+          .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+
+        for (const item of activeItems) {
+          if (resolvedItems.length >= maxLimit) break;
+          if (item.itemType === 'category') {
+            const cat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null }).lean();
+            if (!cat) continue;
+
+            const res = await resolveCategoryBestSellers(
+              item.referenceId,
+              item.displayProductIds?.length ? 'manual' : 'auto',
+              item.displayProductIds || [],
+              storeId
+            );
+
+            resolvedItems.push({
+              ...item,
+              resolvedEntity: {
+                _id: cat._id,
+                name: cat.name,
+                slug: cat.slug,
+                image: (res && res.image) || resolveCategoryImage(cat) || cat.image || '',
+                images: (res && res.images) || [],
+                productCount: res ? res.productCount : 0,
+                isValidImage: true,
+              },
+            });
+          }
+        }
+      } else {
+        const topCategories = await Category.find({
+          active: true,
+          deletedAt: null,
+          parentCategory: null,
+        })
+          .sort({ sortOrder: 1, displayOrder: 1, name: 1 })
+          .lean();
+
+        let idx = 0;
+        for (const cat of topCategories) {
+          if (resolvedItems.length >= maxLimit) break;
+          const res = await resolveCategoryBestSellers(
+            cat._id,
+            'auto',
+            [],
+            storeId
+          );
+          if (res) {
+            resolvedItems.push({
+              itemType: 'category',
+              referenceId: cat._id.toString(),
+              active: true,
+              sortOrder: idx + 1,
+              resolvedEntity: {
+                _id: cat._id,
+                name: cat.name,
+                slug: cat.slug,
+                image: res.image || resolveCategoryImage(cat) || cat.image || '',
+                images: res.images || [],
+                productCount: res.productCount || 0,
+                isValidImage: true,
+              },
+            });
+            idx++;
+          }
+        }
+      }
     } else {
       for (const item of section.items) {
         if (!item.active) continue;
@@ -1162,7 +1185,8 @@ export async function previewConfiguration(
               resolvedEntity: {
                 _id: banner._id,
                 title: banner.title,
-                imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).imageUrl || '',
+                subtitle: banner.subtitle || '',
+                imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).image || (banner as any).imageUrl || '',
                 linkUrl: banner.buttonLink || (banner as any).linkUrl || '',
               },
             });
@@ -1181,9 +1205,61 @@ export async function previewConfiguration(
                 name: store.name,
                 slug: store.slug,
                 city: store.city,
+                image: (store as any).logo || (store as any).banner || '/images/stores/fresh-mart.png',
               },
             });
           }
+        }
+      }
+
+      if (['hero_banner', 'hero_carousel', 'featured_banner', 'featured_this_week'].includes(section.type) && resolvedItems.length === 0) {
+        const defaultBanners = await HeroBanner.find({
+          active: true,
+          deletedAt: null,
+        })
+          .sort({ displayOrder: 1, sortOrder: 1, _id: 1 })
+          .lean();
+
+        for (const banner of defaultBanners) {
+          resolvedItems.push({
+            itemType: 'banner',
+            referenceId: banner._id.toString(),
+            active: true,
+            sortOrder: resolvedItems.length + 1,
+            resolvedEntity: {
+              _id: banner._id,
+              title: banner.title,
+              subtitle: banner.subtitle || '',
+              imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).image || (banner as any).imageUrl || '',
+              linkUrl: banner.buttonLink || (banner as any).linkUrl || '',
+            },
+          });
+        }
+      }
+
+      if (section.type === 'store_spotlight' && resolvedItems.length === 0) {
+        const defaultStores = await Store.find({
+          active: true,
+          deletedAt: null,
+        })
+          .sort({ createdAt: 1, _id: 1 })
+          .limit(10)
+          .lean();
+
+        for (const store of defaultStores) {
+          resolvedItems.push({
+            itemType: 'store',
+            referenceId: store._id.toString(),
+            active: true,
+            sortOrder: resolvedItems.length + 1,
+            resolvedEntity: {
+              _id: store._id,
+              name: store.name,
+              slug: store.slug,
+              city: store.city,
+              image: (store as any).logo || (store as any).banner || '/images/stores/fresh-mart.png',
+            },
+          });
         }
       }
     }

@@ -1,51 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import React, { memo, useEffect, useState } from "react";
-
-export interface CategoryTabItem {
-  slug: string;
-  label: string;
-  icon: string;
-}
-
-const PERMANENT_CATEGORIES: CategoryTabItem[] = [
-  {
-    slug: "all",
-    label: "All",
-    icon: "/icons/categories/all.svg",
-  },
-  {
-    slug: "beauty",
-    label: "Beauty",
-    icon: "/icons/categories/Beauty.svg",
-  },
-  {
-    slug: "electronics",
-    label: "Electronics",
-    icon: "/icons/categories/electronics.svg",
-  },
-  {
-    slug: "pharmacy",
-    label: "Pharmacy",
-    icon: "/icons/categories/pharmacy.svg",
-  },
-  {
-    slug: "decor",
-    label: "Decor",
-    icon: "/icons/categories/decor.svg",
-  },
-  {
-    slug: "kids",
-    label: "Kids",
-    icon: "/icons/categories/kids.svg",
-  },
-  {
-    slug: "gifting",
-    label: "Gifting",
-    icon: "/icons/categories/gifting.svg",
-  },
-];
+import React, { memo, useEffect, useMemo, useState } from "react";
+import {
+  getHeaderNavigation,
+  type HeaderNavigationItem,
+} from "@/services/headerNavigation.service";
 
 interface CategoryChipProps {
   active: boolean;
@@ -75,6 +35,9 @@ const CategoryChip = memo(function CategoryChip({
           loading="eager"
           decoding="async"
           className="h-7 w-7 object-contain"
+          onError={(e) => {
+            (e.target as HTMLElement).style.display = "none";
+          }}
         />
       </span>
 
@@ -101,6 +64,58 @@ const CategoryChip = memo(function CategoryChip({
   );
 });
 
+const DEFAULT_HEADER_COLLECTIONS: HeaderNavigationItem[] = [
+  {
+    slug: "all",
+    label: "All",
+    icon: "/icons/categories/all.svg",
+    active: true,
+    sortOrder: 0,
+  },
+  {
+    slug: "beauty",
+    label: "Beauty",
+    icon: "/icons/categories/Beauty.svg",
+    active: true,
+    sortOrder: 1,
+  },
+  {
+    slug: "electronics",
+    label: "Electronics",
+    icon: "/icons/categories/electronics.svg",
+    active: true,
+    sortOrder: 2,
+  },
+  {
+    slug: "pharmacy",
+    label: "Pharmacy",
+    icon: "/icons/categories/pharmacy.svg",
+    active: true,
+    sortOrder: 3,
+  },
+  {
+    slug: "decor",
+    label: "Decor",
+    icon: "/icons/categories/decor.svg",
+    active: true,
+    sortOrder: 4,
+  },
+  {
+    slug: "kids",
+    label: "Kids",
+    icon: "/icons/categories/kids.svg",
+    active: true,
+    sortOrder: 5,
+  },
+  {
+    slug: "gifting",
+    label: "Gifting",
+    icon: "/icons/categories/gifting.svg",
+    active: true,
+    sortOrder: 6,
+  },
+];
+
 export default function HomeCategories({
   selected = "all",
   className = "",
@@ -109,10 +124,52 @@ export default function HomeCategories({
   className?: string;
 } = {}) {
   const [selectedCategory, setSelectedCategory] = useState(selected);
+  const [headerItems, setHeaderItems] = useState<HeaderNavigationItem[]>(DEFAULT_HEADER_COLLECTIONS);
 
   useEffect(() => {
     setSelectedCategory(selected);
   }, [selected]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void getHeaderNavigation()
+      .then((items) => {
+        if (!cancelled && Array.isArray(items) && items.length > 0) {
+          const hasAll = items.some((i) => i.slug === "all");
+          const merged = hasAll
+            ? items
+            : [
+                {
+                  slug: "all",
+                  label: "All",
+                  icon: "/icons/categories/all.svg",
+                  active: true,
+                  sortOrder: 0,
+                },
+                ...items,
+              ];
+          setHeaderItems(merged);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHeaderItems(DEFAULT_HEADER_COLLECTIONS);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleCollections = useMemo(
+    () =>
+      headerItems
+        .filter((item) => item.active)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [headerItems],
+  );
 
   return (
     <div
@@ -125,7 +182,7 @@ export default function HomeCategories({
       <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-6 bg-gradient-to-l from-transparent to-transparent" />
 
       <div className="flex gap-3 overflow-x-auto scroll-smooth scrollbar-hide">
-        {PERMANENT_CATEGORIES.map((category) => (
+        {visibleCollections.map((category) => (
           <CategoryChip
             key={category.slug}
             active={selectedCategory === category.slug}

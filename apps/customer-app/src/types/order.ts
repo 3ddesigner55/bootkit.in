@@ -46,6 +46,13 @@ export type BootkitOrder = {
   offerCode?: string;
   offerDiscount?: number;
   upiTransactionId?: string;
+  deliveryMinutes?: number;
+  rating?: {
+    stars: number;
+    feedback?: string;
+    tags?: string[];
+    createdAt?: string;
+  };
   createdAt: string;
   updatedAt: string;
 };

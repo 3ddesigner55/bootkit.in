@@ -73,7 +73,7 @@ async function getCategoryAndDescendants(categoryId: mongoose.Types.ObjectId): P
   return result;
 }
 
-async function resolveCategoryBestSellers(
+export async function resolveCategoryBestSellers(
   categoryId: mongoose.Types.ObjectId,
   productMode: 'auto' | 'manual',
   manualProductIds: any[],
@@ -105,10 +105,6 @@ async function resolveCategoryBestSellers(
       const prod = manualMap.get(id.toString());
       if (!prod) continue;
 
-      // Check category hierarchy
-      const isDescendant = descendants.some(dId => dId.toString() === prod.category.toString());
-      if (!isDescendant) continue;
-
       // Check image
       const hasImage = prod.thumbnail || (prod.gallery && prod.gallery.length > 0) || prod.image;
       if (!hasImage) continue;
@@ -127,12 +123,23 @@ async function resolveCategoryBestSellers(
       validProducts.push(prod);
     }
 
-    if (validProducts.length === 4) {
-      products = validProducts;
-    } else {
-      console.warn(`Category "${cat.name}" manual product selection resolved only ${validProducts.length}/4 products.`);
-      return null;
+    if (validProducts.length < 4) {
+      // Pad with auto category products
+      const eligibleProducts = await Product.find({
+        category: { $in: descendants },
+        _id: { $nin: validProducts.map(p => p._id) },
+        active: true,
+        deletedAt: null,
+        $or: [
+          { thumbnail: { $nin: [null, ''] } },
+          { gallery: { $not: { $size: 0 } } },
+          { image: { $nin: [null, ''] } },
+        ],
+      }).limit(4 - validProducts.length).lean();
+      validProducts.push(...eligibleProducts);
     }
+
+    products = validProducts.slice(0, 4);
   } else {
     // Automatic Mode
     const eligibleProducts = await Product.find({
@@ -205,8 +212,8 @@ async function resolveCategoryBestSellers(
     products = filteredProducts.slice(0, 4);
   }
 
-  if (products.length < 4) {
-    console.warn(`Category "${cat.name}" has only ${products.length} serviceable products.`);
+  if (products.length === 0) {
+    console.warn(`Category "${cat.name}" has no serviceable products.`);
     return null;
   }
 
@@ -414,8 +421,6 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
       const maxLimit = (rowCount || 1) * 4;
       if (selectionMode === 'MANUAL') {
         const manualItems = (section.items || []).filter((i: any) => i.active);
-        const descendants = await getCategoryAndDescendants(section.sourceCategoryId);
-        const descendantIds = new Set(descendants.map(d => d.toString()));
 
         const itemsToResolve = [];
         for (const item of manualItems) {
@@ -423,11 +428,7 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
           const cat = await Category.findOne({ _id: item.referenceId, active: true, deletedAt: null }).lean();
           if (!cat) continue;
 
-          const isDirectChild = cat.parentCategory && cat.parentCategory.toString() === section.sourceCategoryId.toString();
-          if (!isDirectChild) continue;
-
-          const resolvedImg = resolveCategoryImage(cat);
-          if (!resolvedImg) continue;
+          const resolvedImg = resolveCategoryImage(cat) || (typeof cat.image === 'string' && cat.image.trim() ? cat.image.trim() : '') || '/images/placeholder.png';
 
           itemsToResolve.push({
             itemType: 'category',
@@ -454,8 +455,7 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
         for (const sub of subcategories) {
           if (resolvedItems.length >= maxLimit) break;
 
-          const resolvedImg = resolveCategoryImage(sub);
-          if (!resolvedImg) continue;
+          const resolvedImg = resolveCategoryImage(sub) || (typeof sub.image === 'string' && sub.image.trim() ? sub.image.trim() : '') || '/images/placeholder.png';
 
           resolvedItems.push({
             itemType: 'category',
@@ -616,6 +616,77 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
           }
         }
       }
+    } else if (sectionType === 'best_sellers') {
+      const maxLimit = 6;
+      if (selectionMode === 'MANUAL') {
+        const activeItems = (section.items || [])
+          .filter((i: any) => i.active)
+          .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+
+        for (const item of activeItems) {
+          if (resolvedItems.length >= maxLimit) break;
+          if (item.itemType === 'category') {
+            const res = await resolveCategoryBestSellers(
+              item.referenceId,
+              item.displayProductIds?.length ? 'manual' : 'auto',
+              item.displayProductIds || [],
+              storeId
+            );
+            if (res) {
+              resolvedItems.push({
+                itemType: 'category',
+                referenceId: res._id.toString(),
+                name: res.name,
+                slug: res.slug,
+                image: res.image,
+                count: res.count,
+                productCount: res.productCount,
+                images: res.images,
+                displayProductIds: (item.displayProductIds || []).map((id: any) => id.toString()),
+                targetType: item.targetType || 'category',
+                targetValue: item.targetValue || `/category/${res.slug}`,
+                sortOrder: item.sortOrder,
+              });
+            }
+          }
+        }
+      } else {
+        const topCategories = await Category.find({
+          active: true,
+          deletedAt: null,
+          parentCategory: null,
+        })
+          .sort({ sortOrder: 1, displayOrder: 1, name: 1 })
+          .lean();
+
+        let idx = 0;
+        for (const cat of topCategories) {
+          if (resolvedItems.length >= maxLimit) break;
+          const res = await resolveCategoryBestSellers(
+            cat._id,
+            'auto',
+            [],
+            storeId
+          );
+          if (res && res.images && res.images.length > 0) {
+            resolvedItems.push({
+              itemType: 'category',
+              referenceId: res._id.toString(),
+              name: res.name,
+              slug: res.slug,
+              image: res.image,
+              count: res.count,
+              productCount: res.productCount,
+              images: res.images,
+              displayProductIds: [],
+              targetType: 'category',
+              targetValue: `/category/${res.slug}`,
+              sortOrder: idx + 1,
+            });
+            idx++;
+          }
+        }
+      }
     } else {
       // Legacy banner/offer/spotlight resolution
       const activeItems = (section.items || [])
@@ -723,7 +794,8 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
               itemType: 'banner',
               referenceId: banner._id.toString(),
               title: banner.title,
-              imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).imageUrl || '',
+              subtitle: banner.subtitle || '',
+              imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).image || (banner as any).imageUrl || '',
               linkUrl: banner.buttonLink || (banner as any).linkUrl || '',
               targetType: item.targetType || 'collection',
               targetValue: item.targetValue || banner.buttonLink || (banner as any).linkUrl || '',
@@ -743,11 +815,59 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
               name: store.name,
               slug: store.slug,
               city: store.city,
+              image: (store as any).logo || (store as any).banner || '/images/stores/fresh-mart.png',
               targetType: item.targetType || 'internal_page',
               targetValue: item.targetValue || `/store/${store.slug}`,
               sortOrder: item.sortOrder,
             });
           }
+        }
+      }
+
+      if (['hero_banner', 'hero_carousel', 'featured_banner', 'featured_this_week'].includes(section.type) && resolvedItems.length === 0) {
+        const defaultBanners = await HeroBanner.find({
+          active: true,
+          deletedAt: null,
+        })
+          .sort({ displayOrder: 1, sortOrder: 1, _id: 1 })
+          .lean();
+
+        for (const banner of defaultBanners) {
+          resolvedItems.push({
+            itemType: 'banner',
+            referenceId: banner._id.toString(),
+            title: banner.title,
+            subtitle: banner.subtitle || '',
+            imageUrl: banner.desktopImage || banner.mobileImage || (banner as any).image || (banner as any).imageUrl || '',
+            linkUrl: banner.buttonLink || (banner as any).linkUrl || '',
+            targetType: 'collection',
+            targetValue: banner.buttonLink || (banner as any).linkUrl || '',
+            sortOrder: resolvedItems.length + 1,
+          });
+        }
+      }
+
+      if (section.type === 'store_spotlight' && resolvedItems.length === 0) {
+        const defaultStores = await Store.find({
+          active: true,
+          deletedAt: null,
+        })
+          .sort({ createdAt: 1, _id: 1 })
+          .limit(10)
+          .lean();
+
+        for (const store of defaultStores) {
+          resolvedItems.push({
+            itemType: 'store',
+            referenceId: store._id.toString(),
+            name: store.name,
+            slug: store.slug,
+            city: store.city,
+            image: (store as any).logo || (store as any).banner || '/images/stores/fresh-mart.png',
+            targetType: 'internal_page',
+            targetValue: `/store/${store.slug}`,
+            sortOrder: resolvedItems.length + 1,
+          });
         }
       }
     }

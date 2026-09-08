@@ -7,7 +7,52 @@ import { BEST_SELLER_CATEGORIES, type ProductCollectionCategory } from "./bestSe
 import ProductCollectionBottomSheet from "@/components/product/ProductCollectionBottomSheet";
 import type { Product } from "@/types/product";
 import { useLocation } from "@/hooks/useLocation";
+import { getCustomerCategoryProducts } from "@/services/customerApi.service";
 import { getProducts } from "@/services/product.service";
+
+const DEFAULT_GRID_FALLBACKS = [
+  "/images/products/milk.png",
+  "/images/products/apple.jpg",
+  "/images/products/banana.png",
+  "/images/products/potato.png",
+];
+
+function SafeGridImage({ src, alt, fallbackSrc }: { src: string; alt: string; fallbackSrc: string }) {
+  const [imgSrc, setImgSrc] = useState(src || fallbackSrc);
+
+  useEffect(() => {
+    setImgSrc(src || fallbackSrc);
+  }, [src, fallbackSrc]);
+
+  return (
+    <img
+      src={imgSrc}
+      alt={alt}
+      loading="eager"
+      decoding="async"
+      onError={() => {
+        if (imgSrc !== fallbackSrc) {
+          setImgSrc(fallbackSrc);
+        }
+      }}
+      className="h-[52px] w-[52px] object-contain"
+    />
+  );
+}
+
+function getFourPreviewImages(images?: string[]): string[] {
+  const valid = (images || []).filter((img) => typeof img === "string" && img.trim() !== "");
+  if (valid.length === 0) {
+    return DEFAULT_GRID_FALLBACKS;
+  }
+  const result = [...valid];
+  let idx = 0;
+  while (result.length < 4) {
+    result.push(valid[idx % valid.length] || DEFAULT_GRID_FALLBACKS[idx % DEFAULT_GRID_FALLBACKS.length]);
+    idx++;
+  }
+  return result.slice(0, 4);
+}
 
 interface BestSellerGridProps {
   categories?: ProductCollectionCategory[];
@@ -18,9 +63,9 @@ export default function BestSellerGrid({
   categories: initialCategories,
   products: initialProducts = [],
 }: BestSellerGridProps = {}) {
-  const categoriesList = useMemo(() => initialCategories ?? BEST_SELLER_CATEGORIES, [initialCategories]);
+  const categoriesList = useMemo(() => initialCategories ?? [], [initialCategories]);
   const [selectedCategory, setSelectedCategory] = useState(
-    (initialCategories ?? BEST_SELLER_CATEGORIES)?.[0]?.title ?? "",
+    initialCategories?.[0]?.title ?? "",
   );
   const [popupOpen, setPopupOpen] = useState(false);
   const { resolvedStoreId } = useLocation();
@@ -37,13 +82,9 @@ export default function BestSellerGrid({
     async (category: ProductCollectionCategory) => {
       if (initialProducts.length > 0) return;
 
-      if (!resolvedStoreId || !category.slug) {
+      if (!category.slug) {
         setProducts([]);
-        setPopupError(
-          !resolvedStoreId
-            ? "Delivery store is still being resolved."
-            : "This collection is unavailable.",
-        );
+        setPopupError("This collection is unavailable.");
         return;
       }
 
@@ -52,13 +93,30 @@ export default function BestSellerGrid({
       setPopupError(null);
 
       try {
-        const response = await getProducts({
-          category: category.slug,
-          storeId: resolvedStoreId,
-          limit: 100,
-        });
+        let loadedItems: Product[] = [];
+        try {
+          const catRes = await getCustomerCategoryProducts(category.slug, {
+            storeId: resolvedStoreId || undefined,
+            limit: 100,
+          });
+          if (catRes && (catRes.products || catRes.items)) {
+            loadedItems = (catRes.products || catRes.items) as unknown as Product[];
+          }
+        } catch {
+          // fallback to getProducts
+        }
+
+        if (loadedItems.length === 0) {
+          const response = await getProducts({
+            category: category.slug,
+            storeId: resolvedStoreId || undefined,
+            limit: 100,
+          });
+          loadedItems = (response.items || []) as unknown as Product[];
+        }
+
         if (currentRequestId === requestId.current) {
-          setProducts(response.items as unknown as Product[]);
+          setProducts(loadedItems);
         }
       } catch (error) {
         if (currentRequestId === requestId.current) {
@@ -79,7 +137,7 @@ export default function BestSellerGrid({
       return;
     }
 
-    const category = categoriesList.find((item) => item.title === selectedCategory);
+    const category = categoriesList.find((item) => item.title === selectedCategory || item.slug === selectedCategory);
     if (category) void loadCategoryProducts(category);
   }, [categoriesList, loadCategoryProducts, popupOpen, selectedCategory]);
 
@@ -104,35 +162,36 @@ export default function BestSellerGrid({
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          {categoriesList.map((item) => (
-            <button
-              type="button"
-              onClick={() => openPopup(item)}
-              key={item.id ?? item.slug ?? item.title}
-              className="rounded-2xl border border-[#edf2ee] bg-white p-1 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
-            >
-              <div className="grid grid-cols-2 gap-0.5">
-                {item.images.filter(Boolean).slice(0, 4).map((image, idx) => (
-                  <div
-                    key={`${image}-${idx}`}
-                    className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-[#F5F8F5] p-0.5"
-                  >
-                    <Image
-                      src={image}
-                      alt=""
-                      width={70}
-                      height={70}
-                      className="h-[52px] w-[52px] object-contain"
-                    />
-                  </div>
-                ))}
-              </div>
+          {categoriesList.map((item) => {
+            const previewImages = getFourPreviewImages(item.images);
+            return (
+              <button
+                type="button"
+                onClick={() => openPopup(item)}
+                key={item.id ?? item.slug ?? item.title}
+                className="rounded-2xl border border-[#edf2ee] bg-white p-1 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+              >
+                <div className="grid grid-cols-2 gap-0.5">
+                  {previewImages.map((image, idx) => (
+                    <div
+                      key={`${image}-${idx}`}
+                      className="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-[#F5F8F5] p-0.5"
+                    >
+                      <SafeGridImage
+                        src={image}
+                        alt=""
+                        fallbackSrc={DEFAULT_GRID_FALLBACKS[idx % DEFAULT_GRID_FALLBACKS.length]}
+                      />
+                    </div>
+                  ))}
+                </div>
 
-              <p className="mt-3 min-h-[20px] line-clamp-2 text-left text-[11px] font-bold leading-4">
-                {item.title}
-              </p>
-            </button>
-          ))}
+                <p className="mt-3 min-h-[20px] line-clamp-2 text-left text-[11px] font-bold leading-4">
+                  {item.title}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </section>
 

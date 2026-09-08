@@ -62,16 +62,6 @@ export default function CategoryLayout({ slug, onCategoryResolved }: CategoryLay
 
   useEffect(() => {
     let cancelled = false;
-
-    if (!resolvedStoreId) {
-      setProducts([]);
-      setSiblings([]);
-      setLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     setLoading(true);
 
     const sortParam = getSortParam(selectedSort);
@@ -96,7 +86,7 @@ export default function CategoryLayout({ slug, onCategoryResolved }: CategoryLay
     }
 
     void getCustomerCategoryProducts(selectedCategory, {
-      storeId: resolvedStoreId,
+      storeId: resolvedStoreId || undefined,
       brand,
       minPrice,
       maxPrice,

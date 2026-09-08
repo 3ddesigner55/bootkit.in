@@ -1,0 +1,25 @@
+name,slug,parentCategory,image,icon,active,sortOrder
+Snacks & Drinks,snacks-drinks,,/images/categories/bakery-biscuits.png,/icons/categories/all.svg,true,1
+"Dairy, Bread & Breakfast",dairy-bread-breakfast,,/images/categories/dairy-breakfast.png,/icons/categories/all.svg,true,2
+Fruits & Vegetables,fruits-vegetables,,/images/categories/fruits-vegetables.png,/icons/categories/all.svg,true,3
+Chips & Namkeen,chips-namkeen,snacks-drinks,,,true,1
+Cold Drinks & Juices,cold-drinks-juices,snacks-drinks,,,true,2
+Dairy & Eggs,dairy-eggs,dairy-bread-breakfast,,,true,1
+Biscuits & Cookies,biscuits-cookies,dairy-bread-breakfast,,,true,2
+Atta & Flours,atta-flours,dairy-bread-breakfast,,,true,3
+Fresh Fruits,fresh-fruits,fruits-vegetables,,,true,1
+Fresh Vegetables,fresh-vegetables,fruits-vegetables,,,true,2
+Potato Chips,potato-chips,chips-namkeen,,,true,1
+Kurkure & Namkeen,kurkure-namkeen,chips-namkeen,,,true,2
+Soft Drinks & Sodas,soft-drinks-sodas,cold-drinks-juices,,,true,1
+Fruit Juices,fruit-juices,cold-drinks-juices,,,true,2
+Milk & Cream,milk-cream,dairy-eggs,,,true,1
+Butter & Cheese,butter-cheese,dairy-eggs,,,true,2
+Cream Biscuits,cream-biscuits,biscuits-cookies,,,true,1
+Cookies & Crackers,cookies-crackers,biscuits-cookies,,,true,2
+Wheat Flour & Atta,wheat-flour-atta,atta-flours,,,true,1
+Apples & Pears,apples-pears,fresh-fruits,,,true,1
+Bananas & Grapes,bananas-grapes,fresh-fruits,,,true,2
+Pomegranates & Citrus,pomegranates-citrus,fresh-fruits,,,true,3
+Daily Vegetables,daily-vegetables,fresh-vegetables,,,true,1
+Root Vegetables,root-vegetables,fresh-vegetables,,,true,2

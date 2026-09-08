@@ -43,6 +43,7 @@ export type CustomerBrandReference = {
 
 export type CustomerProduct = {
   id: string;
+  _id?: string;
   name: string;
   slug: string;
   description?: string;
@@ -56,6 +57,7 @@ export type CustomerProduct = {
   brand?: CustomerBrandReference;
   mrp?: number;
   sellingPrice: number;
+  price?: number;
   discountPercent?: number;
   sku?: string;
   barcode?: string;
@@ -64,6 +66,8 @@ export type CustomerProduct = {
   minStock?: number;
   trackInventory?: boolean;
   thumbnail?: string;
+  image?: string;
+  images?: string[];
   gallery?: string[];
   variants?: CustomerProductVariant[];
   tags?: string[];

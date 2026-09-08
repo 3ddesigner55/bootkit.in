@@ -5,19 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatPrice(value: number) {
+export function formatPrice(value?: number | null) {
+  const num = typeof value === "number" && !isNaN(value) ? value : 0;
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(num);
 }
 
 export function percentageOff(
-  mrp: number,
-  salePrice: number
+  mrp?: number | null,
+  salePrice?: number | null
 ) {
-  return Math.round(((mrp - salePrice) / mrp) * 100);
+  const m = typeof mrp === "number" && !isNaN(mrp) ? mrp : 0;
+  const s = typeof salePrice === "number" && !isNaN(salePrice) ? salePrice : 0;
+  if (m <= 0 || s >= m) return 0;
+  return Math.round(((m - s) / m) * 100);
 }
 
 export function slugify(text: string) {
@@ -26,4 +30,26 @@ export function slugify(text: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)+/g, "");
+}
+
+export function safeImageUrl(src?: string | null): string {
+  if (!src || typeof src !== "string") return "/images/placeholder.png";
+  const trimmed = src.trim();
+  if (!trimmed) return "/images/placeholder.png";
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:")
+  ) {
+    return trimmed;
+  }
+  try {
+    const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+    return cleanPath
+      .split("/")
+      .map((segment) => encodeURIComponent(decodeURIComponent(segment)))
+      .join("/");
+  } catch {
+    return trimmed;
+  }
 }

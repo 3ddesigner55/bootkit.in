@@ -37,13 +37,11 @@ export default function StoreSpotlight({
   stores: initialStores,
   title = "Store Spotlight",
 }: StoreSpotlightProps = {}) {
-  const isDynamicMode = initialStores !== undefined;
-
-  if (isDynamicMode && (!initialStores || initialStores.length === 0)) {
+  if (!initialStores || initialStores.length === 0) {
     return null;
   }
 
-  const activeStores = isDynamicMode ? initialStores : DEFAULT_STORES;
+  const activeStores = initialStores;
 
   if (!activeStores || activeStores.length === 0) {
     return null;

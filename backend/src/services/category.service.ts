@@ -2,6 +2,8 @@ import { isValidObjectId, Types } from 'mongoose';
 
 import { HTTP_STATUS } from '../constants/httpStatus';
 import Category from '../models/category.model';
+import Brand from '../models/brand.model';
+import Product from '../models/product.model';
 import CatalogAudit from '../models/catalogAudit.model';
 import User from '../models/user.model';
 import type { ApiError } from '../types/api';
@@ -686,17 +688,21 @@ export async function getCategoryProducts(
   // Find all descendant category IDs recursively
   const descendantIds = await getCategoryDescendantIds(category._id);
   const targetCategoryIds = [category._id, ...descendantIds];
+  const targetCategoryDocs = await Category.find({ _id: { $in: targetCategoryIds } }).select('slug _id').lean();
+  const targetCategorySlugs = targetCategoryDocs.map((c) => c.slug).filter(Boolean);
 
   // base filter for products
   const productFilter: any = {
-    category: { $in: targetCategoryIds },
+    $or: [
+      { category: { $in: targetCategoryIds } },
+      { categorySlug: { $in: targetCategorySlugs } },
+    ],
     active: true,
     deletedAt: null,
   };
 
   // If brand is passed, match it by slug or id
   if (query.brand) {
-    const Brand = (await import('../models/brand.model')).default;
     if (isValidObjectId(query.brand)) {
       productFilter.brand = query.brand;
     } else {
@@ -709,7 +715,6 @@ export async function getCategoryProducts(
     }
   }
 
-  const Product = (await import('../models/product.model')).default;
   const allCategoryProducts = await Product.find(productFilter)
     .populate('category', 'name slug')
     .populate('brand', 'name slug logo')
@@ -744,7 +749,7 @@ export async function getCategoryProducts(
   });
 
   // Filter out unavailable or inactive products in inventory
-  productsWithInventory = productsWithInventory.filter((p) => p.active && p.availableStock > 0);
+  productsWithInventory = productsWithInventory.filter((p) => p.active !== false && (p.availableStock > 0 || p.stock > 0 || p.trackInventory === false));
 
   // Apply price range filter
   if (query.minPrice) {

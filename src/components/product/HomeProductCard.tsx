@@ -9,6 +9,7 @@ import type { Product } from "@/types/product";
 import {
   formatPrice,
   percentageOff,
+  safeImageUrl,
 } from "@/lib/utils";
 import { useWishlist } from "@/hooks/useWishlist";
 
@@ -47,6 +48,13 @@ const liked = wishlistHydrated
   product.mrp,
   product.price
 );
+  const displayImage = safeImageUrl(
+    (product.image && typeof product.image === "string" && product.image.trim()) ||
+    (product.thumbnail && typeof product.thumbnail === "string" && product.thumbnail.trim()) ||
+    (Array.isArray(product.images) && product.images.find(Boolean)) ||
+    "/images/placeholder.png"
+  );
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
       {/* Wishlist */}
@@ -74,22 +82,17 @@ const liked = wishlistHydrated
 
         <Link href={`/product/${product.slug}`}>
           <div className="flex h-24 items-center justify-center rounded-lg bg-gray-50">
-            {product.image && !imageError ? (
-              <Image
-                src={product.image}
-                alt={product.name}
-                width={80}
-                height={80}
-                className="object-contain"
-                onError={() =>
-                  setImageError(true)
-                }
-              />
-            ) : (
-              <span className="text-4xl">
-                {product.fallbackIcon}
-              </span>
-            )}
+            <Image
+              src={imageError ? "/images/placeholder.png" : displayImage}
+              alt={product.name}
+              width={80}
+              height={80}
+              unoptimized={displayImage.startsWith("/")}
+              className="object-contain"
+              onError={() =>
+                setImageError(true)
+              }
+            />
           </div>
         </Link>
       </div>

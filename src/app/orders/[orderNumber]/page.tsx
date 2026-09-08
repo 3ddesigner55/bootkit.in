@@ -23,10 +23,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import Header from "@/components/layout/Header";
 import Container from "@/components/ui/Container";
 import { getOrderByNumber } from "@/lib/orders";
 import { formatPrice } from "@/lib/utils";
+import TaxInvoiceModal from "@/components/orders/TaxInvoiceModal";
 import type { BootkitOrder } from "@/types/order";
 
 const orderSteps: BootkitOrder["status"][] = [
@@ -39,13 +39,14 @@ const orderSteps: BootkitOrder["status"][] = [
 
 export default function OrderDetailsPage() {
   const router = useRouter();
-const { addItems } = useCart();
-const { addNotification } = useNotifications();
+  const { addItems } = useCart();
+  const { addNotification } = useNotifications();
   const params = useParams<{ orderNumber: string }>();
   const orderNumber = decodeURIComponent(params.orderNumber);
 
   const [order, setOrder] = useState<BootkitOrder | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
   const cancelOrder = () => {
   if (!order) return;
 
@@ -81,7 +82,7 @@ const reorderItems = () => {
     href: "/cart",
   });
 
-  router.push("/cart");
+  router.push("/cart?from=orders");
 };
 
   useEffect(() => {
@@ -92,9 +93,25 @@ const reorderItems = () => {
   if (!hydrated) {
     return (
       <div className="min-h-screen bg-[var(--background)]">
-        <div className="print:hidden">
-  <Header />
-</div>
+        <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3.5 sm:px-6">
+            <Link
+              href="/orders"
+              aria-label="Back to orders"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 active:scale-95"
+            >
+              <ArrowLeft size={19} />
+            </Link>
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
+                Order details
+              </h1>
+              <p className="text-[11px] font-medium text-gray-500">
+                {orderNumber}
+              </p>
+            </div>
+          </div>
+        </header>
 
         <Container className="py-8">
           <div className="h-[560px] animate-pulse rounded-[28px] bg-white" />
@@ -106,9 +123,22 @@ const reorderItems = () => {
   if (!order) {
     return (
       <div className="min-h-screen bg-[var(--background)]">
-       <div className="print:hidden">
-  <Header />
-</div>
+        <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3.5 sm:px-6">
+            <Link
+              href="/orders"
+              aria-label="Back to orders"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 active:scale-95"
+            >
+              <ArrowLeft size={19} />
+            </Link>
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
+                Order details
+              </h1>
+            </div>
+          </div>
+        </header>
 
         <Container className="py-8">
           <section className="flex min-h-[440px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white px-5 text-center">
@@ -152,28 +182,42 @@ const reorderItems = () => {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <Header />
-
-      <main>
-       <Container className="py-5 sm:py-8">
-          <div className="mb-6 flex items-center gap-3 print:hidden">
+      {/* Clean Top Header (No global Header clutter) */}
+      <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md print:hidden">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="flex items-center gap-3">
             <Link
               href="/orders"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
+              aria-label="Back to orders"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 active:scale-95"
             >
               <ArrowLeft size={19} />
             </Link>
 
             <div>
-              <h1 className="text-[24px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[31px]">
+              <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
                 Order details
               </h1>
 
-              <p className="text-xs text-[var(--text-muted)]">
+              <p className="text-[11px] font-medium text-gray-500">
                 {order.orderNumber}
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowInvoice(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 active:scale-95"
+          >
+            <ReceiptText size={15} className="text-[#16A34A]" />
+            Invoice
+          </button>
+        </div>
+      </header>
+
+      <main>
+       <Container className="py-5 sm:py-8">
 
 <section className="mb-5 hidden border-b border-[var(--border)] pb-5 print:block">
   <div className="flex items-start justify-between gap-6">
@@ -494,8 +538,8 @@ const reorderItems = () => {
 
 <button
   type="button"
-  onClick={() => window.print()}
-  className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-[var(--border)] bg-white text-sm font-black text-[var(--text-primary)] transition hover:bg-[var(--surface-soft)]"
+  onClick={() => setShowInvoice(true)}
+  className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white text-sm font-black text-[var(--text-primary)] transition hover:bg-[var(--surface-soft)]"
 >
   <ReceiptText size={17} />
   Download invoice
@@ -523,6 +567,14 @@ const reorderItems = () => {
           </div>
         </Container>
       </main>
+
+      {/* Tax Invoice Modal */}
+      {showInvoice && (
+        <TaxInvoiceModal
+          order={order}
+          onClose={() => setShowInvoice(false)}
+        />
+      )}
     </div>
   );
 }

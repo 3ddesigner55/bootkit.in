@@ -11,34 +11,23 @@ import {
   Gift,
   Heart,
   LogOut,
-  Mail,
   MapPin,
   Package,
   Pencil,
-  Phone,
   Palette,
-  Save,
   Settings,
   ShieldCheck,
   Store,
   TicketPercent,
   UserRound,
   Wallet,
-  X,
   type LucideIcon,
 } from "lucide-react";
-import {
-  useEffect,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useAccount } from "@/hooks/useAccount";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useWishlist } from "@/hooks/useWishlist";
-import type { CustomerProfile } from "@/types/account";
 
 type AppearanceOption = "light" | "dark" | "system";
 
@@ -56,18 +45,8 @@ export default function AccountPage() {
   const { totalItems: wishlistItems, hydrated: wishlistHydrated } = useWishlist();
   const { theme, setTheme } = useTheme();
 
-  const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-  const [form, setForm] = useState<CustomerProfile>(profile);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [showCompactHeader, setShowCompactHeader] = useState(false);
-
-  useEffect(() => {
-    if (hydrated) {
-      setForm(profile);
-    }
-  }, [profile, hydrated]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -81,75 +60,6 @@ export default function AccountPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const updateField = (event: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    let nextValue = value;
-
-    if (name === "phone") {
-      nextValue = value.replace(/\D/g, "").slice(0, 10);
-    }
-
-    setForm((current) => ({ ...current, [name]: nextValue }));
-    setError("");
-    setSaved(false);
-  };
-
-  const saveProfile = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const fullName = form.fullName.trim();
-    const email = form.email.trim().toLowerCase();
-
-    if (fullName.length < 2) {
-      setError("Please enter your full name.");
-      return;
-    }
-
-    if (!/^[6-9]\d{9}$/.test(form.phone)) {
-      setError("Please enter a valid 10-digit mobile number.");
-      return;
-    }
-
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    updateProfile({
-      fullName,
-      phone: form.phone,
-      email,
-      dateOfBirth: form.dateOfBirth,
-    });
-
-    setEditing(false);
-    setSaved(true);
-    setError("");
-
-    window.setTimeout(() => {
-      setSaved(false);
-    }, 2500);
-  };
-
-  const cancelEditing = () => {
-    setForm(profile);
-    setEditing(false);
-    setError("");
-  };
-
-  const resetProfile = () => {
-    const confirmed = window.confirm(
-      "Remove your saved BootKiT profile from this device?"
-    );
-
-    if (!confirmed) return;
-
-    clearProfile();
-    setForm({ fullName: "", phone: "", email: "", dateOfBirth: "" });
-    setEditing(true);
-    setSaved(false);
-  };
-
   if (!hydrated) {
     return (
       <div className="min-h-screen bg-[#F8FAF8]">
@@ -160,7 +70,6 @@ export default function AccountPage() {
   }
 
   const hasProfile = Boolean(profile.fullName) && Boolean(profile.phone);
-  const firstName = profile.fullName.trim().split(" ")[0] || "Customer";
   const handleBack = () => {
     if (window.history.length > 1) {
       router.back();
@@ -172,15 +81,14 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAF8] pb-28">
-      
       <button
-  type="button"
-  onClick={handleBack}
-  aria-label="Go back"
-  className="fixed left-4 top-3 z-[80] flex h-9 w-9 items-center justify-center rounded-full bg-white"
->
-  <ArrowLeft size={20} />
-</button>
+        type="button"
+        onClick={handleBack}
+        aria-label="Go back"
+        className="fixed left-4 top-3 z-[80] flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm"
+      >
+        <ArrowLeft size={20} />
+      </button>
 
       <header
         className={`fixed inset-x-0 top-0 z-[70] h-14 border-b border-[#EEF2EF] bg-white/90 shadow-[0_2px_10px_rgba(25,50,34,0.07)] backdrop-blur transition duration-[250ms] ${
@@ -196,7 +104,7 @@ export default function AccountPage() {
             aria-label="Go back"
             className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--text-primary)] transition hover:bg-[#F6F8F6]"
           >
-            
+            <ArrowLeft size={20} />
           </button>
           <span className="text-base font-black text-[var(--text-primary)]">Profile</span>
         </div>
@@ -204,13 +112,24 @@ export default function AccountPage() {
 
       <main>
         <section className="relative flex h-[240px] flex-col items-center justify-center overflow-hidden rounded-b-[32px] bg-gradient-to-b from-[#64F5E4] via-[#AEEFE6] to-white px-5 text-center">
-          <span className="relative flex h-24 w-24 items-center justify-center rounded-full border-0 border-black/80 bg-white text-4xl font-black text-black shadow-[0_8px_22px_rgba(15,77,38,0.12)]">
-            <UserRound
-  size={42}
-  strokeWidth={2.2}
-  className="text-black"
-/>
-          </span>
+          <Link
+            href="/account/profile"
+            aria-label="Edit Profile"
+            className="group relative flex h-24 w-24 items-center justify-center rounded-full border-0 border-black/80 bg-white text-4xl font-black text-black shadow-[0_8px_22px_rgba(15,77,38,0.12)] transition hover:scale-105 active:scale-95"
+          >
+            {profile.avatar ? (
+              <span className="text-4xl leading-none">{profile.avatar}</span>
+            ) : (
+              <UserRound
+                size={42}
+                strokeWidth={2.2}
+                className="text-black"
+              />
+            )}
+            <span className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-black text-white shadow-md">
+              <Pencil size={12} />
+            </span>
+          </Link>
           <h1 className="relative mt-3 text-2xl font-black tracking-[-0.04em] text-black">
             {hasProfile ? profile.fullName : "BootKiT Customer"}
           </h1>
@@ -247,16 +166,13 @@ export default function AccountPage() {
           </button>
 
           <AccountSection title="Your Information">
-            <AccountButton
+            <AccountLink
+              href="/account/profile"
               icon={UserRound}
               title="My Profile"
               description={
                 hasProfile ? "View and edit personal details" : "Complete your profile"
               }
-              onClick={() => {
-                setEditing(true);
-                setSaved(false);
-              }}
             />
             <AccountLink
               href="/orders"
@@ -279,20 +195,6 @@ export default function AccountPage() {
               description={`${wishlistHydrated ? wishlistItems : 0} saved products`}
               border
             />
-
-            {editing || saved || error ? (
-              <ProfileForm
-                form={form}
-                editing={editing}
-                saved={saved}
-                error={error}
-                onChange={updateField}
-                onSubmit={saveProfile}
-                onCancel={cancelEditing}
-              />
-            ) : null}
-
-           
           </AccountSection>
 
           <AccountSection title="Payments & Coupons">
@@ -637,94 +539,3 @@ function AccountRowText({
   );
 }
 
-type ProfileFormProps = {
-  form: CustomerProfile;
-  editing: boolean;
-  saved: boolean;
-  error: string;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onCancel: () => void;
-};
-
-function ProfileForm({
-  form,
-  editing,
-  saved,
-  error,
-  onChange,
-  onSubmit,
-  onCancel,
-}: ProfileFormProps) {
-  return (
-    <form onSubmit={onSubmit} className="mt-4 border-t border-[#EEF2EF] pt-4">
-      {saved ? (
-        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-xs font-bold text-[var(--success)]">
-          Profile saved successfully.
-        </div>
-      ) : null}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <ProfileField label="Full name" name="fullName" value={form.fullName} onChange={onChange} placeholder="Enter full name" icon={UserRound} disabled={!editing} required />
-        <ProfileField label="Mobile number" name="phone" value={form.phone} onChange={onChange} placeholder="10-digit mobile number" icon={Phone} disabled={!editing} inputMode="numeric" required />
-        <ProfileField label="Email address" name="email" value={form.email} onChange={onChange} placeholder="Enter email address" icon={Mail} disabled={!editing} inputMode="email" />
-        <ProfileField label="Date of birth" name="dateOfBirth" value={form.dateOfBirth} onChange={onChange} placeholder="" icon={UserRound} disabled={!editing} type="date" />
-      </div>
-      {error ? (
-        <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-[var(--danger)]">
-          {error}
-        </div>
-      ) : null}
-      {editing ? (
-        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <button type="submit" className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-5 text-sm font-black text-white">
-            <Save size={17} />
-            Save profile
-          </button>
-          <button type="button" onClick={onCancel} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-5 text-sm font-black text-[var(--text-secondary)]">
-            <X size={17} />
-            Cancel
-          </button>
-        </div>
-      ) : null}
-    </form>
-  );
-}
-
-type ProfileFieldProps = {
-  label: string;
-  name: keyof CustomerProfile;
-  value: string;
-  placeholder: string;
-  icon: LucideIcon;
-  disabled: boolean;
-  required?: boolean;
-  type?: "text" | "date";
-  inputMode?: "text" | "numeric" | "email" | "tel";
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-};
-
-function ProfileField({
-  label,
-  name,
-  value,
-  placeholder,
-  icon: Icon,
-  disabled,
-  required = false,
-  type = "text",
-  inputMode = "text",
-  onChange,
-}: ProfileFieldProps) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
-        {label}
-        {required ? <span className="ml-1 text-[var(--danger)]">*</span> : null}
-      </span>
-      <span className={`flex h-12 items-center gap-3 rounded-xl border px-3 transition ${disabled ? "border-[var(--border)] bg-[var(--surface-soft)]" : "border-[var(--border)] bg-white focus-within:border-[var(--primary)] focus-within:ring-4 focus-within:ring-green-900/10"}`}>
-        <Icon size={17} className="shrink-0 text-[var(--primary)]" />
-        <input type={type} name={name} value={value} required={required} disabled={disabled} inputMode={inputMode} placeholder={placeholder} onChange={onChange} className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-[var(--text-primary)] outline-none placeholder:font-normal placeholder:text-[var(--text-muted)] disabled:cursor-default" />
-      </span>
-    </label>
-  );
-}

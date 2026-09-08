@@ -3,6 +3,7 @@
 import ProductImageViewer from "./ProductImageViewer";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { safeImageUrl } from "@/lib/utils";
 import type { Product, ProductVariant } from "@/types/product";
 
 type Props = {
@@ -15,18 +16,18 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
     const list: string[] = [];
 
     if (Array.isArray(selectedVariant?.images)) {
-      list.push(...selectedVariant.images.filter((img) => img.trim() !== ""));
+      list.push(...selectedVariant.images.filter((img) => img.trim() !== "").map(safeImageUrl));
     }
 
     if (selectedVariant?.image?.trim()) {
-      list.push(selectedVariant.image);
+      list.push(safeImageUrl(selectedVariant.image));
     }
 
     if (Array.isArray(product.images)) {
       list.push(
-        ...product.images.filter(
-          (img) => typeof img === "string" && img.trim() !== ""
-        )
+        ...product.images
+          .filter((img) => typeof img === "string" && img.trim() !== "")
+          .map(safeImageUrl)
       );
     }
 
@@ -34,10 +35,24 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
       typeof product.image === "string" &&
       product.image.trim() !== ""
     ) {
-      list.push(product.image);
+      list.push(safeImageUrl(product.image));
     }
 
-    return list;
+    if (
+      typeof product.thumbnail === "string" &&
+      product.thumbnail.trim() !== ""
+    ) {
+      const safeThumb = safeImageUrl(product.thumbnail);
+      if (!list.includes(safeThumb)) {
+        list.push(safeThumb);
+      }
+    }
+
+    if (list.length === 0) {
+      list.push("/images/placeholder.png");
+    }
+
+    return Array.from(new Set(list));
   }, [product, selectedVariant]);
 
   const [selected, setSelected] = useState(0);
@@ -49,6 +64,8 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
     setFailed({});
   }, [selectedVariant?.id]);
 
+  const currentImage = images[selected] || "/images/placeholder.png";
+
   return (
     <div>
       {/* Main Image */}
@@ -59,10 +76,11 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
         >
           {images.length > 0 && !failed[selected] ? (
             <Image
-              src={images[selected]}
+              src={currentImage}
               alt={product.name}
               fill
               priority
+              unoptimized={currentImage.startsWith("/")}
               sizes="(max-width:1024px)100vw,50vw"
               className="object-contain p-8 transition duration-300 group-hover:scale-110"
               onError={() =>
@@ -73,9 +91,15 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
               }
             />
           ) : (
-            <div className="flex h-full items-center justify-center text-[120px]">
-              {product.fallbackIcon}
-            </div>
+            <Image
+              src="/images/placeholder.png"
+              alt={product.name}
+              fill
+              priority
+              unoptimized
+              sizes="(max-width:1024px)100vw,50vw"
+              className="object-contain p-8"
+            />
           )}
         </div>
       </div>
@@ -98,6 +122,7 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
                   src={img}
                   alt=""
                   fill
+                  unoptimized={img.startsWith("/")}
                   sizes="80px"
                   className="object-contain p-2"
                   onError={() =>
@@ -109,7 +134,7 @@ export default function ProductGallery({ product, selectedVariant }: Props) {
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-2xl">
-                  {product.fallbackIcon}
+                  {product.fallbackIcon || "📦"}
                 </div>
               )}
             </button>

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Product } from "@/types/product";
 import type { ProductCollectionCategory } from "@/components/home/bestSellerData";
 import { useLocation } from "@/hooks/useLocation";
+import { getCustomerCategoryProducts } from "@/services/customerApi.service";
 import { getProducts } from "@/services/product.service";
 
 import ProductCard from "./ProductCard";
@@ -67,7 +68,9 @@ export default function ProductCollectionBottomSheet({
       return;
     }
 
-    const categoryObj = categories.find((item) => item.title === selectedCategory);
+    const categoryObj = categories.find(
+      (item) => item.title === selectedCategory || (item as any).slug === selectedCategory
+    );
     const categorySlug = (categoryObj as any)?.slug;
     if (!categorySlug) {
       setLoadedProducts([]);
@@ -75,25 +78,35 @@ export default function ProductCollectionBottomSheet({
     }
 
     setLoading(true);
-    getProducts({
-      category: categorySlug,
+    getCustomerCategoryProducts(categorySlug, {
       storeId: resolvedStoreId || undefined,
       limit: 100,
     })
-      .then((res) => {
-        const mapped = res.items.map((p) => ({
-          ...p,
-          brand: p.brandName ?? p.brand?.name,
-          categorySlug: p.categorySlug ?? p.category?.slug,
-          image: p.thumbnail,
-          images: p.gallery,
-          price: p.sellingPrice,
-        } as unknown as Product));
-        setLoadedProducts(mapped);
+      .then((res: any) => {
+        const prods = (res?.products || res?.items || []) as unknown as Product[];
+        setLoadedProducts(prods);
       })
-      .catch((err) => {
-        console.error("Failed to load products for category:", categorySlug, err);
-        setLoadedProducts([]);
+      .catch(() => {
+        getProducts({
+          category: categorySlug,
+          storeId: resolvedStoreId || undefined,
+          limit: 100,
+        })
+          .then((res) => {
+            const mapped = res.items.map((p) => ({
+              ...p,
+              brand: p.brandName ?? p.brand?.name ?? "",
+              categorySlug: p.categorySlug ?? p.category?.slug,
+              image: p.thumbnail,
+              images: p.gallery,
+              price: p.sellingPrice ?? (p as any).price,
+            } as unknown as Product));
+            setLoadedProducts(mapped);
+          })
+          .catch((err) => {
+            console.error("Failed to load products for category:", categorySlug, err);
+            setLoadedProducts([]);
+          });
       })
       .finally(() => {
         setLoading(false);
@@ -103,17 +116,24 @@ export default function ProductCollectionBottomSheet({
   const displayedProductsList = useMemo(() => {
     // If initialProducts was passed (e.g. from parent hardcoding, fallback to it, otherwise use loaded products)
     const baseProducts = initialProducts.length > 0 ? initialProducts : loadedProducts;
-    const category = categories.find((item) => item.title === selectedCategory);
+    const category = categories.find(
+      (item) => item.title === selectedCategory || (item as any).slug === selectedCategory
+    );
     const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
 
     return baseProducts.filter((product) => {
-      const matchesCategory = category?.matches(product) ?? false;
+      const matchesCategory =
+        category?.matches?.(product) ?? true;
+      const brandStr =
+        typeof product.brand === "string"
+          ? product.brand
+          : (product.brand as any)?.name || (product as any).brandName || "";
       const matchesSearch =
         normalizedSearch === "" ||
-        product.name.toLocaleLowerCase().includes(normalizedSearch) ||
-        (product.brand && product.brand.toLocaleLowerCase().includes(normalizedSearch));
+        (product.name || "").toLocaleLowerCase().includes(normalizedSearch) ||
+        brandStr.toLocaleLowerCase().includes(normalizedSearch);
 
-      return product.active && matchesCategory && matchesSearch;
+      return product.active !== false && matchesCategory && matchesSearch;
     });
   }, [categories, initialProducts, loadedProducts, searchQuery, selectedCategory]);
 

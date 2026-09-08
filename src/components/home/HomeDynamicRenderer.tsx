@@ -11,6 +11,7 @@ import { resolveSafeInternalUrl } from "@/utils/navigationWhitelist";
 
 
 import OfferSection, { type OfferItem } from "./offers/OfferSection";
+import HeroCarousel, { type CarouselBanner } from "./hero/HeroCarousel";
 import BestSellerGrid from "./BestSellerGrid";
 import StoreSpotlight from "./sections/StoreSpotlight";
 import GroceryKitchen from "./sections/GroceryKitchen";
@@ -105,6 +106,22 @@ interface HomeDynamicRendererProps {
 // DTO Adapters with strict runtime schema validation
 // -------------------------------------------------------------
 
+function adaptHeroBanners(items: ResolvedHomeConfigItem[]): CarouselBanner[] {
+  return items
+    .filter((item) => item && (item.itemType === "banner" || item.itemType === "offer"))
+    .map((item) => {
+      const safeLink = resolveSafeInternalUrl(
+        item.targetType || "collection",
+        item.targetValue || item.linkUrl || "",
+      );
+      return {
+        title: item.title || item.name || "BootKiT Deals",
+        subtitle: item.subtitle || "",
+        image: item.imageUrl || item.image || "/images/banners/placeholder.png",
+        linkUrl: safeLink || "/products",
+      };
+    });
+}
 
 function adaptOffers(items: ResolvedHomeConfigItem[]): OfferItem[] {
   return items
@@ -124,13 +141,12 @@ function adaptCategorySectionItems(items: ResolvedHomeConfigItem[]) {
         item.itemType === "category" &&
         Boolean(item.referenceId) &&
         Boolean(item.slug) &&
-        Boolean(item.name || item.title) &&
-        Boolean(item.image || item.thumbnail),
+        Boolean(item.name || item.title),
     )
     .map((item) => ({
       name: item.name || item.title || "",
       slug: item.slug || "",
-      image: item.image || item.thumbnail || "",
+      image: item.image || item.thumbnail || "/images/placeholder.png",
     }));
 }
 
@@ -138,18 +154,58 @@ function adaptCategorySectionItems(items: ResolvedHomeConfigItem[]) {
 function adaptProducts(items: ResolvedHomeConfigItem[]): Product[] {
   return items
     .filter((item) => item && item.itemType === "product")
-    .map((item) => ({
-      id: item.referenceId || "",
-      name: item.name || item.title || "",
-      slug: item.slug || "",
-      price: typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
-      mrp: typeof item.mrp === "number" ? item.mrp : typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
-      stock: typeof item.stock === "number" ? item.stock : 0,
-      image: item.thumbnail || item.image || "/images/placeholder.png",
-      images: item.thumbnail ? [item.thumbnail] : [],
-      unit: "1 pc",
-      active: true,
-    } as unknown as Product));
+    .map((item) => {
+      const primary = item.thumbnail || item.image || "/images/placeholder.png";
+      const imagesList = Array.isArray(item.images) && item.images.length > 0
+        ? item.images
+        : item.thumbnail
+          ? [item.thumbnail]
+          : item.image
+            ? [item.image]
+            : [];
+      return {
+        id: item.referenceId || "",
+        name: item.name || item.title || "",
+        slug: item.slug || "",
+        price: typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
+        mrp: typeof item.mrp === "number" ? item.mrp : typeof item.sellingPrice === "number" ? item.sellingPrice : 0,
+        stock: typeof item.stock === "number" ? item.stock : 10,
+        image: primary,
+        thumbnail: primary,
+        images: imagesList,
+        unit: typeof (item as any).unit === "object" && (item as any).unit?.label
+          ? (item as any).unit
+          : { label: typeof (item as any).unit === "string" ? (item as any).unit : "1 pc", value: "1 pc" },
+        rating: (item as any).rating || 4.8,
+        deliveryMinutes: (item as any).deliveryMinutes || 10,
+        fallbackIcon: "🛒",
+        active: true,
+      } as unknown as Product;
+    });
+}
+
+const DEFAULT_PREVIEW_IMAGES = [
+  "/images/products/milk.png",
+  "/images/products/apple.jpg",
+  "/images/products/banana.png",
+  "/images/products/potato.png",
+];
+
+function normalizeFourImages(images?: string[], fallbackImage?: string): string[] {
+  const valid = (images || []).filter((img) => typeof img === "string" && img.trim() !== "");
+  if (fallbackImage && typeof fallbackImage === "string" && fallbackImage.trim() !== "" && !valid.includes(fallbackImage)) {
+    valid.push(fallbackImage);
+  }
+  if (valid.length === 0) {
+    return DEFAULT_PREVIEW_IMAGES;
+  }
+  const result = [...valid];
+  let idx = 0;
+  while (result.length < 4) {
+    result.push(valid[idx % valid.length] || DEFAULT_PREVIEW_IMAGES[idx % DEFAULT_PREVIEW_IMAGES.length]);
+    idx++;
+  }
+  return result.slice(0, 4);
 }
 
 function adaptBestSellerCategories(items: ResolvedHomeConfigItem[]): ProductCollectionCategory[] {
@@ -160,18 +216,19 @@ function adaptBestSellerCategories(items: ResolvedHomeConfigItem[]): ProductColl
         item.itemType === "category" &&
         Boolean(item.referenceId) &&
         Boolean(item.slug) &&
-        Boolean(item.name || item.title) &&
-        Boolean(item.images?.some(Boolean) || item.image || item.thumbnail),
+        Boolean(item.name || item.title),
     )
-    .map((item) => ({
-      id: item.referenceId,
-      title: item.name || item.title || "",
-      slug: item.slug || "",
-      count: item.count,
-      images:
-        item.images?.filter(Boolean) ??
-        [item.image || item.thumbnail || ""].filter(Boolean),
-    }));
+    .map((item) => {
+      const singleFallback = item.image || item.thumbnail;
+      const fourImages = normalizeFourImages(item.images, singleFallback);
+      return {
+        id: item.referenceId,
+        title: item.name || item.title || "",
+        slug: item.slug || "",
+        count: item.count,
+        images: fourImages,
+      };
+    });
 }
 
 function adaptSpotlightStores(items: ResolvedHomeConfigItem[]) {
@@ -195,26 +252,8 @@ function adaptSpotlightStores(items: ResolvedHomeConfigItem[]) {
 // -------------------------------------------------------------
 // EXACT DEFAULT HOME FALLBACK SEQUENCE
 // -------------------------------------------------------------
-export function DefaultHomeFallback({
-  bestSellerCategories,
-}: {
-  bestSellerCategories?: ProductCollectionCategory[];
-} = {}) {
-  return (
-    <>
-      
-      <OfferSection />
-      <BestSellerGrid categories={bestSellerCategories} />
-      <GroceryKitchen />
-      <DryFoodMasala />
-      <HouseholdEssentials />
-      <SweetTooth />
-      <FeaturedThisWeek />
-      <SnacksDrinks />
-      <BeautyPersonalCare />
-      <StoreSpotlight />
-    </>
-  );
+export function DefaultHomeFallback() {
+  return null;
 }
 
 // -------------------------------------------------------------
@@ -225,21 +264,24 @@ function renderSection(section: ResolvedHomeConfigSection) {
 
   switch (section.type) {
     case "hero_carousel":
-    case "hero_banner":
-      return null;
+    case "hero_banner": {
+      const banners = adaptHeroBanners(activeItems);
+      if (banners.length === 0) return null;
+      return <HeroCarousel banners={banners} />;
+    }
 
     case "offer_section":
     case "offer": {
       const offers = adaptOffers(activeItems);
+      if (offers.length === 0) return null;
       return <OfferSection offers={offers} />;
     }
 
     case "best_seller_grid":
     case "best_sellers": {
       const categories = adaptBestSellerCategories(activeItems);
-      return (
-        <BestSellerGrid categories={categories} />
-);
+      if (categories.length === 0) return null;
+      return <BestSellerGrid categories={categories} />;
     }
 
     case "grocery_kitchen":
@@ -249,7 +291,7 @@ function renderSection(section: ResolvedHomeConfigSection) {
     case "category_cards":
     case "category_grid": {
       const catItems = adaptCategorySectionItems(activeItems);
-      const items = catItems.length > 0 ? catItems : undefined;
+      if (catItems.length === 0) return null;
       const viewAllUrl = section.sourceCategory?.slug
         ? resolveSafeInternalUrl("category", section.sourceCategory.slug) ?? undefined
         : undefined;
@@ -261,9 +303,9 @@ function renderSection(section: ResolvedHomeConfigSection) {
           ? 1
           : 2);
       if (rowCount === 1) {
-        return <GroceryKitchen items={items} title={section.title} viewAllUrl={viewAllUrl} />;
+        return <GroceryKitchen items={catItems} title={section.title} viewAllUrl={viewAllUrl} />;
       } else {
-        return <HouseholdEssentials items={items} title={section.title} viewAllUrl={viewAllUrl} />;
+        return <HouseholdEssentials items={catItems} title={section.title} viewAllUrl={viewAllUrl} />;
       }
     }
 
@@ -271,36 +313,40 @@ function renderSection(section: ResolvedHomeConfigSection) {
     case "dry_food_masala":
     case "product_grid": {
       const products = adaptProducts(activeItems);
-      const productItems = products.length > 0 ? products : undefined;
+      if (products.length === 0) return null;
       const viewAllUrl = section.sourceCategory?.slug
         ? resolveSafeInternalUrl("category", section.sourceCategory.slug) ?? undefined
         : undefined;
-      return <DryFoodMasala products={productItems} title={section.title} viewAllUrl={viewAllUrl} />;
+      return <DryFoodMasala products={products} title={section.title} viewAllUrl={viewAllUrl} />;
     }
 
     case "featured_this_week":
     case "featured_banner": {
       const banners = activeItems
         .filter((item) => item.itemType === "banner" || item.itemType === "offer")
-        .map((item) => {
+        .map((item, idx) => {
           const safeLink = resolveSafeInternalUrl(
             item.targetType || "collection",
             item.targetValue || item.linkUrl || "",
           );
+          const fallbackBanner = `/images/banners/banner${(idx % 3) + 1}.png`;
+          const rawImage = item.imageUrl || item.image || "";
+          const validImage = rawImage && !rawImage.includes("undefined") && !rawImage.includes("null") ? rawImage : fallbackBanner;
           return {
-            id: item.referenceId,
+            id: item.referenceId || `featured-banner-${idx}`,
             title: item.title || section.title,
-            desktopImage: item.imageUrl || item.image || "/images/banners/placeholder.png",
-            mobileImage: item.imageUrl || item.image || "/images/banners/placeholder.png",
+            desktopImage: validImage,
+            mobileImage: validImage,
             buttonLink: safeLink || "/categories",
-            displayOrder: item.sortOrder || 1,
+            displayOrder: item.sortOrder || idx + 1,
             showOnHome: true,
             active: true,
           };
         });
+      if (banners.length === 0) return null;
       return (
         <FeaturedThisWeek
-          banners={banners.length > 0 ? banners : undefined}
+          banners={banners}
           title={section.title}
         />
       );
@@ -308,6 +354,7 @@ function renderSection(section: ResolvedHomeConfigSection) {
 
     case "store_spotlight": {
       const stores = adaptSpotlightStores(activeItems);
+      if (stores.length === 0) return null;
       return <StoreSpotlight stores={stores} title={section.title} />;
     }
 
@@ -333,31 +380,15 @@ function safeRenderSection(section: ResolvedHomeConfigSection) {
 
 export default function HomeDynamicRenderer({
   config,
-  legacyData,
 }: HomeDynamicRendererProps) {
-  // If no published config or empty sections or unsupported schema version, render exact default fallback
+  // If no published config or empty sections or unsupported schema version, render null
   if (
     !config ||
     config.schemaVersion !== SUPPORTED_SCHEMA_VERSION ||
     !config.sections ||
     config.sections.length === 0
   ) {
-    return (
-      
-      <DefaultHomeFallback
-        bestSellerCategories={
-          legacyData
-            ? legacyData.bestSellers.map((item) => ({
-                id: item.id,
-                title: item.name,
-                slug: item.slug,
-                count: item.count,
-                images: item.images,
-              }))
-            : undefined
-        }
-      />
-    );
+    return null;
   }
 
   // Sort sections deterministically by sortOrder
@@ -367,19 +398,14 @@ export default function HomeDynamicRenderer({
 
   return (
     <>
-        <OfferSection />
       {sortedSections
-        .filter(
-          (section) =>
-            section.type !== "hero_carousel" && section.type !== "hero_banner",
-        )
         .map((section) => (
-        <SectionErrorBoundary
-          key={section.sectionId}
-          sectionId={section.sectionId}
-        >
-          {safeRenderSection(section)}
-        </SectionErrorBoundary>
+          <SectionErrorBoundary
+            key={section.sectionId}
+            sectionId={section.sectionId}
+          >
+            {safeRenderSection(section)}
+          </SectionErrorBoundary>
         ))}
     </>
   );

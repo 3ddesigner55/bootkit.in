@@ -26,6 +26,7 @@ export type ProductVariant = {
 };
 
 export type Product = {
+  _id?: string;
   description: string;
   id: string;
   name: string;

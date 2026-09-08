@@ -37,7 +37,7 @@ export default function CategoryProductGrid({
         <div className="grid grid-cols-2 gap-4">
           {products.map((product) => (
             <ProductCard
-              key={product.id}
+              key={product._id || product.id}
               product={product}
               variant="bestSellerPopup"
               onClick={() => {

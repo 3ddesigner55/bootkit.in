@@ -1,8 +1,19 @@
-import { getCustomerHomeData, getCachedCustomerHomeData } from "./customerApi.service";
+import {
+  getCustomerHomeData,
+  getCachedCustomerHomeData,
+  subscribeHomeDataUpdates,
+  invalidateHomeDataCache,
+  broadcastHomeConfigUpdate,
+} from "./customerApi.service";
 import type { CustomerHomeData } from "./customerApi.types";
 
 export type HomeData = CustomerHomeData;
-export { getCachedCustomerHomeData };
+export {
+  getCachedCustomerHomeData,
+  subscribeHomeDataUpdates,
+  invalidateHomeDataCache,
+  broadcastHomeConfigUpdate,
+};
 export type HomeCategorySection =
   | "groceryKitchen"
   | "householdEssentials"

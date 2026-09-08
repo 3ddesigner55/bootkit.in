@@ -33,19 +33,19 @@ productRoutes.get('/:id', asyncHandler(getProductController));
 adminProductRoutes.get(
   '/legacy-report',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getLegacyProductsReportController),
 );
 adminProductRoutes.get(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getAdminProductsController),
 );
 adminProductRoutes.post(
   '/upload',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   upload.fields([
     { name: 'thumbnail', maxCount: 1 },
     { name: 'gallery', maxCount: 8 },
@@ -55,39 +55,39 @@ adminProductRoutes.post(
 adminProductRoutes.post(
   '/import/validate',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   csvUpload.single('csv'),
   asyncHandler(importProductValidateController),
 );
 adminProductRoutes.post(
   '/import/confirm',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(importProductConfirmController),
 );
 adminProductRoutes.post(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateProductCreateRequest,
   asyncHandler(createProductController),
 );
 adminProductRoutes.get(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getProductController),
 );
 adminProductRoutes.patch(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateProductUpdateRequest,
   asyncHandler(updateProductController),
 );
 adminProductRoutes.delete(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(deleteProductController),
 );

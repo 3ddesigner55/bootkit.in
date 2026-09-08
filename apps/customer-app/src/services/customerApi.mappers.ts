@@ -226,8 +226,19 @@ export function toCustomerProduct(value: unknown): CustomerProduct {
     ? record.variants.map(toProductVariant)
     : undefined;
 
+  const id = getId(record, "Product");
+  const sellingPrice =
+    optionalNumber(record, "sellingPrice") ??
+    optionalNumber(record, "price") ??
+    0;
+  const mrp = optionalNumber(record, "mrp") ?? sellingPrice;
+  const thumbnail = optionalString(record, "thumbnail") ?? optionalString(record, "image");
+  const gallery = stringArray(record, "gallery") ?? stringArray(record, "images");
+  const images = gallery && gallery.length > 0 ? gallery : thumbnail ? [thumbnail] : [];
+
   return {
-    id: getId(record, "Product"),
+    id,
+    _id: id,
     name: requiredString(record, "name", "Product"),
     slug: requiredString(record, "slug", "Product"),
     ...(optionalString(record, "description")
@@ -243,10 +254,9 @@ export function toCustomerProduct(value: unknown): CustomerProduct {
     ...(brandId ? { brandId } : {}),
     ...(brandName ? { brandName } : {}),
     ...(brand ? { brand } : {}),
-    ...(optionalNumber(record, "mrp") !== undefined
-      ? { mrp: optionalNumber(record, "mrp") }
-      : {}),
-    sellingPrice: requiredNumber(record, "sellingPrice", "Product"),
+    mrp,
+    sellingPrice,
+    price: sellingPrice,
     ...(optionalNumber(record, "discountPercent") !== undefined
       ? { discountPercent: optionalNumber(record, "discountPercent") }
       : {}),
@@ -256,22 +266,17 @@ export function toCustomerProduct(value: unknown): CustomerProduct {
     ...(optionalString(record, "barcode")
       ? { barcode: optionalString(record, "barcode") }
       : {}),
-    stock: requiredNumber(record, "stock", "Product"),
-    ...(optionalNumber(record, "availableStock") !== undefined
-      ? { availableStock: optionalNumber(record, "availableStock") }
-      : {}),
+    stock: optionalNumber(record, "stock") ?? 10,
+    availableStock: optionalNumber(record, "availableStock") ?? optionalNumber(record, "stock") ?? 10,
     ...(optionalNumber(record, "minStock") !== undefined
       ? { minStock: optionalNumber(record, "minStock") }
       : {}),
     ...(optionalBoolean(record, "trackInventory") !== undefined
       ? { trackInventory: optionalBoolean(record, "trackInventory") }
       : {}),
-    ...(optionalString(record, "thumbnail")
-      ? { thumbnail: optionalString(record, "thumbnail") }
-      : {}),
-    ...(stringArray(record, "gallery")
-      ? { gallery: stringArray(record, "gallery") }
-      : {}),
+    ...(thumbnail ? { thumbnail, image: thumbnail } : {}),
+    ...(gallery ? { gallery } : {}),
+    images,
     ...(variants ? { variants } : {}),
     ...(stringArray(record, "tags")
       ? { tags: stringArray(record, "tags") }
@@ -279,31 +284,25 @@ export function toCustomerProduct(value: unknown): CustomerProduct {
     ...(optionalString(record, "fallbackIcon")
       ? { fallbackIcon: optionalString(record, "fallbackIcon") }
       : {}),
-    ...(optionalNumber(record, "rating") !== undefined
-      ? { rating: optionalNumber(record, "rating") }
-      : {}),
-    featured: requiredBoolean(record, "featured", "Product"),
+    rating: optionalNumber(record, "rating") ?? 4.8,
+    featured: optionalBoolean(record, "featured") ?? false,
     ...(optionalBoolean(record, "bestseller") !== undefined
       ? { bestseller: optionalBoolean(record, "bestseller") }
       : {}),
-    active: requiredBoolean(record, "active", "Product"),
+    active: optionalBoolean(record, "active") ?? true,
     ...(optionalBoolean(record, "isAvailable") !== undefined
       ? { isAvailable: optionalBoolean(record, "isAvailable") }
       : {}),
-    showOnHome: requiredBoolean(record, "showOnHome", "Product"),
+    showOnHome: optionalBoolean(record, "showOnHome") ?? true,
     ...(optionalString(record, "homeSection")
       ? { homeSection: optionalString(record, "homeSection") }
       : {}),
-    displayOrder: requiredNumber(record, "displayOrder", "Product"),
+    displayOrder: optionalNumber(record, "displayOrder") ?? 0,
     ...(optionalNumber(record, "weight") !== undefined
       ? { weight: optionalNumber(record, "weight") }
       : {}),
-    ...(optionalString(record, "unit")
-      ? { unit: optionalString(record, "unit") }
-      : {}),
-    ...(optionalNumber(record, "deliveryMinutes") !== undefined
-      ? { deliveryMinutes: optionalNumber(record, "deliveryMinutes") }
-      : {}),
+    unit: optionalString(record, "unit") || (typeof record.unit === "object" && record.unit !== null && (record.unit as any).label ? (record.unit as any).label : "1 pc"),
+    deliveryMinutes: optionalNumber(record, "deliveryMinutes") ?? 10,
     ...(optionalString(record, "createdAt")
       ? { createdAt: optionalString(record, "createdAt") }
       : {}),

@@ -3,6 +3,7 @@
 import { useCoupon } from "@/hooks/useCoupon";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ChevronRight,
@@ -10,8 +11,7 @@ import {
   ShoppingBag,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
-import Header from "@/components/layout/Header";
+import { Suspense, useState } from "react";
 import Container from "@/components/ui/Container";
 import QuantitySelector from "@/components/ui/QuantitySelector";
 import { useCart } from "@/hooks/useCart";
@@ -21,6 +21,26 @@ const FREE_DELIVERY_MINIMUM = 499;
 const DELIVERY_FEE = 29;
 
 export default function CartPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--background)]">
+          <Container className="py-8">
+            <div className="h-72 animate-pulse rounded-[24px] border border-[var(--border)] bg-white" />
+          </Container>
+        </div>
+      }
+    >
+      <CartPageContent />
+    </Suspense>
+  );
+}
+
+function CartPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+
   const {
     items,
     totalItems,
@@ -32,13 +52,9 @@ export default function CartPage() {
     clearCart,
   } = useCart();
 
-  const {
-  appliedCoupon,
-  hydrated: couponHydrated,
-} = useCoupon();
+  const { appliedCoupon, hydrated: couponHydrated } = useCoupon();
 
-const couponDiscount =
-  appliedCoupon?.discountAmount ?? 0;
+  const couponDiscount = appliedCoupon?.discountAmount ?? 0;
 
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
@@ -52,20 +68,38 @@ const couponDiscount =
   const deliveryFee =
     subtotal === 0 || subtotal >= FREE_DELIVERY_MINIMUM ? 0 : DELIVERY_FEE;
 
-  const finalTotal = Math.max(
-  subtotal + deliveryFee - couponDiscount,
-  0
-);
+  const finalTotal = Math.max(subtotal + deliveryFee - couponDiscount, 0);
 
-  const amountForFreeDelivery = Math.max(
-    FREE_DELIVERY_MINIMUM - subtotal,
-    0
-  );
+  const amountForFreeDelivery = Math.max(FREE_DELIVERY_MINIMUM - subtotal, 0);
 
- if (!hydrated || !couponHydrated) {
+  const handleBack = () => {
+    if (from === "orders") {
+      router.push("/orders");
+    } else {
+      router.push("/");
+    }
+  };
+
+  if (!hydrated || !couponHydrated) {
     return (
       <div className="min-h-screen bg-[var(--background)]">
-        <Header />
+        <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3.5 sm:px-6">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Back"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 active:scale-95"
+            >
+              <ArrowLeft size={19} />
+            </button>
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
+                Your cart
+              </h1>
+            </div>
+          </div>
+        </header>
 
         <Container className="py-8">
           <div className="h-72 animate-pulse rounded-[24px] border border-[var(--border)] bg-white" />
@@ -76,42 +110,42 @@ const couponDiscount =
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <Header />
+      <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label={from === "orders" ? "Back to orders" : "Back to home"}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 active:scale-95"
+            >
+              <ArrowLeft size={19} />
+            </button>
+
+            <div>
+              <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
+                Your cart
+              </h1>
+              <p className="text-[11px] font-medium text-gray-500">
+                {totalItems} {totalItems === 1 ? "item" : "items"} selected
+              </p>
+            </div>
+          </div>
+
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={clearCart}
+              className="rounded-xl border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-bold text-[var(--danger)] transition hover:bg-red-100"
+            >
+              Clear cart
+            </button>
+          )}
+        </div>
+      </header>
 
       <main>
         <Container className="py-5 sm:py-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/"
-                aria-label="Back to home"
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--primary)]"
-              >
-                <ArrowLeft size={19} />
-              </Link>
-
-              <div>
-                <h1 className="text-[24px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[30px]">
-                  Your cart
-                </h1>
-
-                <p className="mt-0.5 text-xs text-[var(--text-muted)] sm:text-sm">
-                  {totalItems} {totalItems === 1 ? "item" : "items"} selected
-                </p>
-              </div>
-            </div>
-
-            {items.length > 0 && (
-              <button
-                type="button"
-                onClick={clearCart}
-                className="rounded-xl px-3 py-2 text-xs font-bold text-[var(--danger)] transition hover:bg-red-50"
-              >
-                Clear cart
-              </button>
-            )}
-          </div>
-
           {items.length === 0 ? (
             <section className="flex min-h-[460px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white px-5 py-12 text-center shadow-[var(--shadow-sm)]">
               <span className="flex h-20 w-20 items-center justify-center rounded-[24px] bg-[var(--primary-light)] text-[var(--primary)]">

@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ProductDrawer from "@/components/product/ProductDrawer";
 import { searchProducts } from "@/services/search.service";
-import { getHome, getCachedCustomerHomeData } from "@/services/home.service";
+import {
+  getHome,
+  getCachedCustomerHomeData,
+  subscribeHomeDataUpdates,
+  invalidateHomeDataCache,
+} from "@/services/home.service";
 import { useLocation } from "@/hooks/useLocation";
 import type {
   CustomerBestSellerItem,
@@ -16,6 +21,7 @@ import type { ProductCollectionCategory } from "./bestSellerData";
 import HomeHeader from "./HomeHeader";
 import HomeSearch from "./HomeSearch";
 import HomeCategories from "./HomeCategories";
+import OfferSection from "./offers/OfferSection";
 import HomeDynamicRenderer, { DefaultHomeFallback } from "./HomeDynamicRenderer";
 
 function toSearchProduct(product: CustomerProduct): Product {
@@ -50,7 +56,7 @@ function toBestSellerCategories(
 }
 
 export default function AppHome() {
-  const { location, hydrated, setResolvedStoreId } = useLocation();
+  const { location, setResolvedStoreId } = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -62,18 +68,11 @@ export default function AppHome() {
   // Monotonic request counter for stale-response protection
   const latestRequestId = useRef(0);
 
-  useEffect(() => {
+  const fetchFreshHomeData = useCallback((forceRefresh = false) => {
     const currentRequestId = ++latestRequestId.current;
-    let cancelled = false;
-
-    const cached = getCachedCustomerHomeData(undefined, location?.city);
-    if (cached && !homeData) {
-      setHomeData(cached);
-    }
-
-    getHome(undefined, location?.city)    
+    getHome(undefined, location?.city)
       .then((data) => {
-        if (!cancelled && currentRequestId === latestRequestId.current) {
+        if (currentRequestId === latestRequestId.current) {
           setHomeData(data);
           if (data?.resolvedStoreId && setResolvedStoreId) {
             setResolvedStoreId(data.resolvedStoreId);
@@ -81,18 +80,59 @@ export default function AppHome() {
         }
       })
       .catch((err) => {
-        if (
-          !cancelled &&
-          currentRequestId === latestRequestId.current
-        ) {
+        if (currentRequestId === latestRequestId.current) {
           console.error("Error fetching home data:", err);
         }
       });
+  }, [location?.city, setResolvedStoreId]);
+
+  useEffect(() => {
+    // Initial fetch
+    fetchFreshHomeData();
+
+    // Subscribe to background SWR updates from customerApi.service
+    const unsubscribe = subscribeHomeDataUpdates((freshData) => {
+      setHomeData(freshData);
+      if (freshData?.resolvedStoreId && setResolvedStoreId) {
+        setResolvedStoreId(freshData.resolvedStoreId);
+      }
+    });
+
+    // Listen to cross-tab / Admin Merchandising Broadcast Channel
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel("bootkit_merchandising");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "HOME_CONFIG_UPDATED") {
+          invalidateHomeDataCache();
+          fetchFreshHomeData(true);
+        }
+      };
+    } catch {}
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "bootkit_merchandising_sync") {
+        invalidateHomeDataCache();
+        fetchFreshHomeData(true);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchFreshHomeData();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      cancelled = true;
+      unsubscribe();
+      if (channel) channel.close();
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [location?.city, setResolvedStoreId]);
+  }, [fetchFreshHomeData, setResolvedStoreId]);
 
 
 
@@ -153,19 +193,13 @@ export default function AppHome() {
           <HomeCategories />
         </div>
 
-        {homeData?.config ? (
+        <OfferSection />
+
+        {homeData?.config && (
           <HomeDynamicRenderer
             config={homeData.config}
             legacyData={homeData}
           />
-        ) : homeData ? (
-          <DefaultHomeFallback
-            bestSellerCategories={toBestSellerCategories(
-              homeData.bestSellers,
-            )}
-          />
-        ) : (
-          <DefaultHomeFallback />
         )}
       </main>
 

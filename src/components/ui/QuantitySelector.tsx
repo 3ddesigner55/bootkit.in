@@ -18,7 +18,7 @@ export default function QuantitySelector({
   onDecrease,
   className,
 }: QuantitySelectorProps) {
-  const cannotDecrease = quantity <= 1;
+  const cannotDecrease = quantity <= 0;
   const cannotIncrease = quantity >= max;
 
   return (

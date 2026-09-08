@@ -1,0 +1,11 @@
+name,slug,description,logo,banner,website,featured,active,displayOrder
+Lays,lays,Crispy potato chips brand,,,,true,true,1
+Kurkure,kurkure,Tedha hai par mera hai snacks,,,,true,true,2
+Coca-Cola,coca-cola,Refreshing soft drinks,,,,true,true,3
+Thums Up,thums-up,Taste the thunder,,,,true,true,4
+Limca,limca,Lime & lemony refreshment,,,,false,true,5
+Amul,amul,The Taste of India dairy products,,,,true,true,6
+Britannia,britannia,Eat Healthy Think Better bakery,,,,true,true,7
+Cadbury Oreo,cadbury-oreo,"Twist, Lick, Dunk cookies",,,,true,true,8
+Sunfeast,sunfeast,Pure indulgence biscuits,,,,true,true,9
+Fresh Farm,fresh-farm,Farm fresh produce and groceries,,,,true,true,10

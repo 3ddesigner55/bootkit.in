@@ -39,6 +39,7 @@ import {
   ImageUploader,
   type ImageUploaderItem,
 } from "@/components/admin/media";
+import { broadcastHomeConfigUpdate } from "@/services/customerApi.service";
 
 type CategoryTreeNode = {
   id: string;
@@ -305,6 +306,7 @@ export default function AdminCategoriesClient() {
       if (!res.ok || !data.success) throw new Error(data.message || "Failed to save category.");
 
       setIsFormOpen(false);
+      broadcastHomeConfigUpdate();
       void fetchData();
     } catch (err: any) {
       setFormError(err.message);
@@ -323,6 +325,7 @@ export default function AdminCategoriesClient() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Archive failed.");
+      broadcastHomeConfigUpdate();
       void fetchData();
     } catch (err: any) {
       alert(err.message);

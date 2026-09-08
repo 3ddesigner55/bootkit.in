@@ -27,13 +27,13 @@ heroBannerRoutes.get('/', asyncHandler(getPublicHeroBannersController));
 adminHeroBannerRoutes.get(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getAdminHeroBannersController),
 );
 adminHeroBannerRoutes.get(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getAdminHeroBannerController),
 );
 adminHeroBannerRoutes.post(
@@ -49,20 +49,20 @@ adminHeroBannerRoutes.post(
 adminHeroBannerRoutes.post(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateHeroBannerCreateRequest,
   asyncHandler(createHeroBannerController),
 );
 adminHeroBannerRoutes.patch(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateHeroBannerUpdateRequest,
   asyncHandler(updateHeroBannerController),
 );
 adminHeroBannerRoutes.delete(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(deleteHeroBannerController),
 );

@@ -64,16 +64,22 @@ export default function ProductCollectionBottomSheet({
     const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
 
     return products.filter((product) => {
-      const category = categories.find((item) => item.title === selectedCategory);
+      const category = categories.find(
+        (item) => item.title === selectedCategory || item.slug === selectedCategory
+      );
       const matchesCategory = onCategoryChange
         ? true
-        : (category?.matches?.(product) ?? false);
+        : (category?.matches?.(product) ?? true);
+      const brandStr =
+        typeof product.brand === "string"
+          ? product.brand
+          : (product.brand as any)?.name || (product as any).brandName || "";
       const matchesSearch =
         normalizedSearch === "" ||
-        product.name.toLocaleLowerCase().includes(normalizedSearch) ||
-        product.brand.toLocaleLowerCase().includes(normalizedSearch);
+        (product.name || "").toLocaleLowerCase().includes(normalizedSearch) ||
+        brandStr.toLocaleLowerCase().includes(normalizedSearch);
 
-      return product.active && matchesCategory && matchesSearch;
+      return product.active !== false && matchesCategory && matchesSearch;
     });
   }, [categories, onCategoryChange, products, searchQuery, selectedCategory]);
 

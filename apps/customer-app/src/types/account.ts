@@ -3,6 +3,9 @@ export type CustomerProfile = {
   phone: string;
   email: string;
   dateOfBirth: string;
+  gender?: string;
+  avatar?: string;
+  alternatePhone?: string;
 };
 
 export type UserRole = "OWNER" | "ADMIN" | "SELLER" | "CUSTOMER" | "DELIVERY";

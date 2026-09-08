@@ -29,19 +29,19 @@ brandRoutes.get('/:id', asyncHandler(getBrandController));
 adminBrandRoutes.get(
   '/options',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getBrandOptionsController),
 );
 adminBrandRoutes.get(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(getAdminBrandsController),
 );
 adminBrandRoutes.post(
   '/upload',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   upload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'banner', maxCount: 1 },
@@ -51,20 +51,20 @@ adminBrandRoutes.post(
 adminBrandRoutes.post(
   '/',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateBrandCreateRequest,
   asyncHandler(createBrandController),
 );
 adminBrandRoutes.patch(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   validateBrandUpdateRequest,
   asyncHandler(updateBrandController),
 );
 adminBrandRoutes.delete(
   '/:id',
   authenticate,
-  authorizeRoles(ROLES.ADMIN),
+  authorizeRoles(ROLES.ADMIN, ROLES.OWNER),
   asyncHandler(deleteBrandController),
 );
