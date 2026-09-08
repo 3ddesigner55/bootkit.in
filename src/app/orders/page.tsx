@@ -11,15 +11,17 @@ import {
   MoreVertical,
   RotateCcw,
   Search,
+  Share2,
   ShoppingBag,
   Star,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/hooks/useCart";
 import { useNotifications } from "@/hooks/useNotifications";
 import { formatPrice } from "@/lib/utils";
-import { getStoredOrders, rateStoredOrder } from "@/lib/orders";
+import { deleteStoredOrder, getStoredOrders, rateStoredOrder } from "@/lib/orders";
 import TaxInvoiceModal from "@/components/orders/TaxInvoiceModal";
 import type { BootkitOrder } from "@/types/order";
 
@@ -39,17 +41,42 @@ export default function OrdersPage() {
   const [ratingComment, setRatingComment] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleShareOrder = (order: BootkitOrder) => {
+    setActiveMenuOrder(null);
+    const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/orders/${order.orderNumber}` : "";
+    const shareText = `Order #${order.orderNumber} placed on BootKiT for ${formatPrice(order.totalAmount)}.`;
+
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({
+        title: `BootKiT Order #${order.orderNumber}`,
+        text: shareText,
+        url: shareUrl,
+      }).catch(() => {});
+    } else if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl);
+      showToast("Order link copied to clipboard!");
+    }
+  };
+
+  const handleDeleteOrder = (order: BootkitOrder) => {
+    setActiveMenuOrder(null);
+    const confirmed = window.confirm(`Delete order #${order.orderNumber}?`);
+    if (!confirmed) return;
+
+    deleteStoredOrder(order.orderNumber);
+    setOrders((prev) => prev.filter((o) => o.orderNumber !== order.orderNumber));
+    showToast("Order deleted.");
+  };
+
   useEffect(() => {
     setOrders(getStoredOrders());
     setHydrated(true);
   }, []);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3200);
-  };
 
   const handleReorder = (order: BootkitOrder) => {
     if (!order.items || order.items.length === 0) return;
@@ -59,12 +86,12 @@ export default function OrdersPage() {
       type: "ORDER",
       title: "Items reordered",
       message: `${order.items.length} items added to your cart.`,
-      href: "/cart",
+      href: "/checkout",
     });
 
-    showToast("Items added to cart! Redirecting to cart...");
+    showToast("Items added to cart! Redirecting to checkout...");
     setTimeout(() => {
-      router.push("/cart?from=orders");
+      router.push("/checkout?from=orders");
     }, 500);
   };
 
@@ -303,50 +330,34 @@ export default function OrdersPage() {
                             className="fixed inset-0 z-40"
                             onClick={() => setActiveMenuOrder(null)}
                           />
-                          <div className="absolute right-0 top-9 z-50 w-44 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
-                            <Link
-                              href={`/orders/${order.orderNumber}`}
-                              onClick={() => setActiveMenuOrder(null)}
-                              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-                            >
-                              <FileText size={15} className="text-gray-400" />
-                              View details
-                            </Link>
+                          <div className="absolute right-0 top-9 z-50 w-40 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
                             <button
                               type="button"
-                              onClick={() => {
-                                setActiveMenuOrder(null);
-                                setInvoiceOrder(order);
-                              }}
-                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                              onClick={() => handleShareOrder(order)}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-gray-700 transition hover:bg-gray-50 hover:text-gray-900"
                             >
-                              <CheckCircle2
-                                size={15}
-                                className="text-gray-400"
-                              />
-                              Download invoice
+                              <Share2 size={15} className="text-gray-400" />
+                              Share order
                             </button>
-                            <a
-                              href="https://wa.me/919999999999"
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => setActiveMenuOrder(null)}
-                              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOrder(order)}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-red-600 transition hover:bg-red-50 hover:text-red-700"
                             >
-                              <HelpCircle
-                                size={15}
-                                className="text-gray-400"
-                              />
-                              Need help?
-                            </a>
+                              <Trash2 size={15} className="text-red-500" />
+                              Delete order
+                            </button>
                           </div>
                         </>
                       )}
                     </div>
                   </div>
 
-                  {/* Product Thumbnails Row */}
-                  <div className="mt-4 flex items-center gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {/* Product Thumbnails Row - clicking opens Order Summary */}
+                  <Link
+                    href={`/orders/${order.orderNumber}`}
+                    className="mt-4 flex items-center gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden group"
+                  >
                     {order.items.map((item, idx) => {
                       const img =
                         item.product.thumbnail ||
@@ -358,14 +369,14 @@ export default function OrdersPage() {
                         <div
                           key={`${item.product.id}-${idx}`}
                           title={`${item.product.name} (x${item.quantity})`}
-                          className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-[#F8FAFC] p-1.5 sm:h-18 sm:w-18"
+                          className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-[#F8FAFC] p-1.5 transition group-hover:border-gray-300 sm:h-18 sm:w-18"
                         >
                           {img ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={img}
                               alt={item.product.name}
-                              className="h-full w-full object-contain"
+                              className="h-full w-full object-contain transition group-hover:scale-105"
                               onError={(e) => {
                                 const target = e.currentTarget;
                                 target.style.display = "none";
@@ -392,14 +403,13 @@ export default function OrdersPage() {
                     })}
 
                     {order.items.length > 5 && (
-                      <Link
-                        href={`/orders/${order.orderNumber}`}
+                      <span
                         className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 text-xs font-bold text-gray-500 hover:bg-gray-100"
                       >
                         +{order.items.length - 5}
-                      </Link>
+                      </span>
                     )}
-                  </div>
+                  </Link>
 
                   {/* Bottom Action Buttons */}
                   <div className="mt-4 flex items-center gap-3 pt-3 border-t border-gray-100">

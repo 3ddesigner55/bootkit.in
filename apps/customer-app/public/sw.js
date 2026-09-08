@@ -3,7 +3,7 @@ const CACHE_NAME = "bootkit-shell-v1";
 const APP_SHELL = [
   "/",
   "/categories",
-  "/cart",
+  "/checkout",
   "/orders",
 ];
 

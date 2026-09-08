@@ -899,7 +899,22 @@ async function resolvePublishedHomeConfig(publishedConfig: HomeConfigDocument, s
   };
 }
 
-export async function getHomeData(storeId?: string, city?: string) {
+const serverHomeCache = new Map<string, { data: any; expiresAt: number }>();
+const SERVER_HOME_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes fast in-memory caching
+
+export function invalidateServerHomeCache() {
+  serverHomeCache.clear();
+}
+
+export async function getHomeData(storeId?: string, city?: string, forceRefresh = false) {
+  const cacheKey = `${storeId || ''}:${city || ''}`;
+  if (!forceRefresh) {
+    const cached = serverHomeCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.data;
+    }
+  }
+
   const now = new Date();
 
   const { resolveStoreContext } = await import('./store.service');
@@ -1021,7 +1036,7 @@ export async function getHomeData(storeId?: string, city?: string) {
     }
   }
 
-  return {
+  const result = {
     resolvedStoreId: resolvedStoreId || null,
     config: versionedConfig,
     heroBanners,
@@ -1034,5 +1049,12 @@ export async function getHomeData(storeId?: string, city?: string) {
     beautyPersonalCare,
     storeSpotlight,
   };
+
+  serverHomeCache.set(cacheKey, {
+    data: result,
+    expiresAt: Date.now() + SERVER_HOME_CACHE_TTL_MS,
+  });
+
+  return result;
 }
 

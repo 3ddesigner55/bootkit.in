@@ -233,7 +233,34 @@ function adaptSpotlightStores(items: ResolvedHomeConfigItem[]): SpotlightStore[]
 // EXACT DEFAULT HOME FALLBACK SEQUENCE
 // -------------------------------------------------------------
 export function DefaultHomeFallback() {
-  return null;
+  return (
+    <div className="mt-5 space-y-6">
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="mb-3 h-5 w-32 animate-pulse rounded bg-gray-200" />
+        <div className="grid grid-cols-3 gap-2.5">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex flex-col items-center rounded-xl bg-gray-50 p-2">
+              <div className="h-16 w-16 animate-pulse rounded-lg bg-gray-200" />
+              <div className="mt-2 h-3 w-12 animate-pulse rounded bg-gray-200" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="mb-3 h-5 w-36 animate-pulse rounded bg-gray-200" />
+        <div className="grid grid-cols-2 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex flex-col rounded-xl border border-gray-100 p-2.5">
+              <div className="h-28 w-full animate-pulse rounded-lg bg-gray-200" />
+              <div className="mt-2 h-3.5 w-3/4 animate-pulse rounded bg-gray-200" />
+              <div className="mt-1 h-3 w-1/2 animate-pulse rounded bg-gray-200" />
+              <div className="mt-2 h-6 w-full animate-pulse rounded bg-gray-200" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // -------------------------------------------------------------

@@ -147,7 +147,7 @@ const {
           )}
 
           <Link
-            href="/cart"
+            href="/checkout"
             className="flex h-12 items-center gap-2 rounded-2xl bg-[var(--primary)] px-4 text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--primary-hover)]"
           >
             <ShoppingBag size={20} />

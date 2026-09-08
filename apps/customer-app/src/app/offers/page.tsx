@@ -87,11 +87,11 @@ export default function OffersPage() {
             </div>
 
             <Link
-              href="/cart"
+              href="/checkout"
               className="relative mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-black px-4 text-xs font-black text-[var(--primary)]"
             >
               <ShoppingBag size={16} />
-              Open cart
+              Open checkout
               <ChevronRight size={15} />
             </Link>
           </section>

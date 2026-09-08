@@ -6,13 +6,11 @@ export default function Home() {
   return (
     <>
       {/* Mobile View */}
-
       <div className="block lg:hidden">
         <AppHome />
       </div>
 
       {/* Desktop View */}
-
       <div className="hidden lg:block">
         <WebsiteHome />
       </div>
@@ -21,3 +19,4 @@ export default function Home() {
     </>
   );
 }
+

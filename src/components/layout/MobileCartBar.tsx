@@ -45,7 +45,7 @@ export default function MobileCartBar() {
 
   return (
     <Link
-      href="/cart"
+      href="/checkout"
       className="fixed bottom-[calc(78px+env(safe-area-inset-bottom))] left-1/2 z-40 flex h-[50px] w-fit min-w-[180px] max-w-[270px] -translate-x-1/2 items-center rounded-full bg-[var(--primary)] px-2.5 text-white shadow-[0_10px_24px_rgba(15,66,42,0.22)] transition duration-200 hover:scale-[1.02] active:scale-[0.98]"
     >
       <span className="flex min-w-0 flex-1 items-center gap-2.5">

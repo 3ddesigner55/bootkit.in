@@ -564,3 +564,17 @@ export function cancelStoredOrder(orderNumber: string) {
     updatedAt: new Date().toISOString(),
   }));
 }
+
+export function deleteStoredOrder(orderNumber: string): boolean {
+  if (!isBrowser()) return false;
+
+  const orders = getStoredOrders();
+  const updatedOrders = orders.filter((order) => order.orderNumber !== orderNumber);
+
+  window.localStorage.setItem(
+    ORDER_STORAGE_KEY,
+    JSON.stringify(updatedOrders)
+  );
+
+  return true;
+}

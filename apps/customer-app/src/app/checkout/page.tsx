@@ -1,56 +1,51 @@
 "use client";
 
-import CouponSelector from "@/components/coupon/CouponSelector";
-import { useCoupon } from "@/hooks/useCoupon";
-import { getStoredOrders } from "@/lib/orders";
-import SavedAddressSelector from "@/components/checkout/SavedAddressSelector";
-import { useAddresses } from "@/hooks/useAddresses";
-import { useAccount } from "@/hooks/useAccount";
-import type { SavedAddress } from "@/types/address";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useDeliveryAreas } from "@/hooks/useDeliveryAreas";
-import { useNotifications } from "@/hooks/useNotifications";
-import type { ReactNode } from "react";
-import { QRCodeSVG } from "qrcode.react";
-
-import CheckoutProgress from "@/components/checkout/CheckoutProgress";
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
-
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Banknote,
+  Bike,
+  Check,
   CheckCircle2,
   ChevronRight,
+  Clock,
   CreditCard,
   Home,
-  MapPin,
+  Mic,
   PackageCheck,
-  ShieldCheck,
+  PhoneOff,
+  Plus,
+  Receipt,
+  Search,
+  Share2,
+  ShoppingBag,
+  TicketPercent,
+  X,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
-import Container from "@/components/ui/Container";
-import Header from "@/components/layout/Header";
 import { useCart } from "@/hooks/useCart";
-import { formatPrice } from "@/lib/utils";
-import { generateOrderNumber, saveOrder } from "@/lib/orders";
+import { useAddresses } from "@/hooks/useAddresses";
+import { useAccount } from "@/hooks/useAccount";
+import { useCoupon } from "@/hooks/useCoupon";
+import { useNotifications } from "@/hooks/useNotifications";
+import { formatPrice, safeImageUrl } from "@/lib/utils";
+import { generateOrderNumber, getStoredOrders, saveOrder } from "@/lib/orders";
+import { products as allStoreProducts } from "@/data/products";
+import CouponSelector from "@/components/coupon/CouponSelector";
+import type { SavedAddress } from "@/types/address";
 import type {
   AddressType,
   BootkitOrder,
   CheckoutAddress,
   PaymentMethod,
 } from "@/types/order";
+import type { Product } from "@/types/product";
 
-
-
-const FREE_DELIVERY_MINIMUM = 499;
-const DELIVERY_FEE = 29;
+const DELIVERY_FEE = 0; // Free delivery active as per screenshot
+const HANDLING_CHARGE = 9;
 
 const initialAddress: CheckoutAddress = {
   fullName: "",
@@ -59,395 +54,303 @@ const initialAddress: CheckoutAddress = {
   street: "",
   area: "",
   landmark: "",
-  city: "",
-  state: "",
-  pincode: "",
+  city: "Jaipur",
+  state: "Rajasthan",
+  pincode: "302025",
   addressType: "Home",
 };
-type CheckoutStep = 1 | 2 | 3;
 
-export default function CheckoutPage() {
+export default function CustomerCheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#F8FAF8]">
+          <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+            <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3.5 sm:px-6">
+              <div className="h-10 w-10 animate-pulse rounded-xl bg-gray-200" />
+              <div className="h-5 w-28 animate-pulse rounded-lg bg-gray-200" />
+            </div>
+          </header>
+          <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
+            <div className="h-44 animate-pulse rounded-2xl bg-white" />
+            <div className="h-60 animate-pulse rounded-2xl bg-white" />
+          </div>
+        </div>
+      }
+    >
+      <CustomerCheckoutPageContent />
+    </Suspense>
+  );
+}
+
+function CustomerCheckoutPageContent() {
   const router = useRouter();
-  const { session, hydrated: accountHydrated } = useAccount();
+  const searchParams = useSearchParams();
+  const from = searchParams?.get("from");
 
+  const handleBack = () => {
+    if (from === "orders") {
+      router.push("/orders");
+    } else if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/");
+    }
+  };
+
+  const { profile } = useAccount();
   const {
     items,
     subtotal,
     totalItems,
-    hydrated,
+    hydrated: cartHydrated,
+    addItem,
+    increaseItem,
+    decreaseItem,
+    getQuantity,
     clearCart,
   } = useCart();
   const {
-  addresses,
-  defaultAddress,
-  hydrated: addressesHydrated,
-} = useAddresses();
+    addresses,
+    defaultAddress,
+    hydrated: addressesHydrated,
+    addAddress,
+  } = useAddresses();
+  const {
+    appliedCoupon,
+    hydrated: couponHydrated,
+    removeCoupon,
+  } = useCoupon();
+  const { addNotification } = useNotifications();
 
+  const couponDiscount = appliedCoupon?.discountAmount ?? 0;
+  const hasPreviousOrders = getStoredOrders().length > 0;
 
-const {
-  appliedCoupon,
-  hydrated: couponHydrated,
-  removeCoupon,
-} = useCoupon();
+  // Selected Address State
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [address, setAddress] = useState<CheckoutAddress>(initialAddress);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showNewAddressForm, setShowNewAddressForm] = useState(false);
 
-const couponDiscount = appliedCoupon?.discountAmount ?? 0;
-  
+  // Delivery Instructions State
+  const [isRecording, setIsRecording] = useState(false);
+  const [avoidCalling, setAvoidCalling] = useState(false);
+  const [dontRingBell, setDontRingBell] = useState(false);
 
-const { addNotification } = useNotifications();
-const {
-  serviceablePincodes,
-  getDeliveryAreasByPincode,
-} = useDeliveryAreas();
+  // GSTIN Modal State
+  const [showGstinModal, setShowGstinModal] = useState(false);
+  const [gstin, setGstin] = useState("");
+  const [gstinName, setGstinName] = useState("");
+  const [savedGstin, setSavedGstin] = useState<{ gstin: string; name: string } | null>(null);
 
+  // Search Products Modal State (to add more items directly in checkout)
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-const [selectedAddressId, setSelectedAddressId] = useState("");
-const [checkoutStep, setCheckoutStep] =
-  useState<CheckoutStep>(1);
+  // Coupon Drawer State
+  const [showCouponDrawer, setShowCouponDrawer] = useState(false);
 
-  const [address, setAddress] =
-    useState<CheckoutAddress>(initialAddress);
-
-
-    
-
-
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("COD");
-
+  // Payment Drawer & Process State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [upiTransactionId, setUpiTransactionId] = useState("");
   const [upiCopied, setUpiCopied] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(10 * 60);
+  const [paymentSubmitted, setPaymentSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
-  
+  // Sync default address on load
+  useEffect(() => {
+    if (!addressesHydrated || selectedAddressId) return;
+
+    const targetAddress =
+      defaultAddress ||
+      addresses.find((a) => a.isDefault) ||
+      addresses[0];
+
+    if (targetAddress) {
+      setSelectedAddressId(targetAddress.id);
+      setAddress({
+        fullName: targetAddress.fullName,
+        phone: targetAddress.phone,
+        houseNumber: targetAddress.houseNumber,
+        street: targetAddress.street,
+        area: targetAddress.area ?? "",
+        landmark: targetAddress.landmark || "",
+        city: targetAddress.city,
+        state: targetAddress.state,
+        pincode: targetAddress.pincode,
+        addressType: targetAddress.addressType,
+      });
+    } else {
+      setAddress((prev) => ({
+        ...prev,
+        fullName: profile?.fullName || "Customer",
+        phone: profile?.phone || "9876543210",
+      }));
+    }
+  }, [addressesHydrated, defaultAddress, addresses, selectedAddressId, profile]);
+
+  // UPI Timer Countdown
+  useEffect(() => {
+    if (!showPaymentModal || paymentMethod !== "UPI" || timeLeft <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [showPaymentModal, paymentMethod, timeLeft]);
+
   const copyUpiId = async () => {
     try {
       await navigator.clipboard.writeText("bootkit@ybl");
       setUpiCopied(true);
-
-      window.setTimeout(() => {
-        setUpiCopied(false);
-      }, 2000);
+      showToast("UPI ID copied!");
+      setTimeout(() => setUpiCopied(false), 2000);
     } catch {
       setError("UPI ID could not be copied.");
     }
   };
-  const PAYMENT_TIME = 10 * 60;
-const [timeLeft, setTimeLeft] = useState(PAYMENT_TIME);
-const [paymentSubmitted, setPaymentSubmitted] = useState(false);
-const [paymentStatus, setPaymentStatus] = useState<
-  "idle" | "submitted"
->("idle");
-  
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [contactPickerAvailable, setContactPickerAvailable] = useState(false);
-  const hasPreviousOrders = getStoredOrders().length > 0;
 
-const availableDeliveryAreas = useMemo(
-  () =>
-    getDeliveryAreasByPincode(
-      address.pincode
-    ),
-  [
-    address.pincode,
-    getDeliveryAreasByPincode,
-  ]
-);
+  // Filter products for Search Modal
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return allStoreProducts.slice(0, 10);
+    }
+    const q = searchQuery.toLowerCase().trim();
+    return allStoreProducts.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.brand?.toLowerCase().includes(q) ||
+        p.categorySlug?.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
 
-useEffect(() => {
-  setContactPickerAvailable("contacts" in navigator);
-}, []);
-
-const pickContactNumber = async () => {
-  type ContactsNavigator = Navigator & { contacts?: { select: (properties: string[], options?: { multiple?: boolean }) => Promise<Array<{ tel?: string[] }>> } };
-  const contactNavigator = navigator as ContactsNavigator;
-  if (!contactNavigator.contacts) return;
-  try {
-    const contacts = await contactNavigator.contacts.select(["tel"], { multiple: false });
-    const phone = contacts[0]?.tel?.[0]?.replace(/\D/g, "").slice(-10);
-    if (phone) setAddress((current) => ({ ...current, phone }));
-  } catch {
-    // The customer dismissed the browser's contact picker.
-  }
-};
-
-  const applySavedAddress = (savedAddress: SavedAddress) => {
-  setSelectedAddressId(savedAddress.id);
-
-  setAddress({
-  fullName: savedAddress.fullName,
-  phone: savedAddress.phone,
-  houseNumber: savedAddress.houseNumber,
-  street: savedAddress.street,
-  area: savedAddress.area ?? "",
-  landmark: savedAddress.landmark,
-  city: savedAddress.city,
-  state: savedAddress.state,
-  pincode: savedAddress.pincode,
-  addressType: savedAddress.addressType,
-});
-
-  setError("");
-};
-useEffect(() => {
-  if (
-    !addressesHydrated ||
-    !defaultAddress ||
-    selectedAddressId
-  ) {
-    return;
-  }
-
-  setSelectedAddressId(defaultAddress.id);
-
-  setAddress({
-  fullName: defaultAddress.fullName,
-  phone: defaultAddress.phone,
-  houseNumber: defaultAddress.houseNumber,
-  street: defaultAddress.street,
-  area: defaultAddress.area ?? "",
-  landmark: defaultAddress.landmark,
-  city: defaultAddress.city,
-  state: defaultAddress.state,
-  pincode: defaultAddress.pincode,
-  addressType: defaultAddress.addressType,
-}); 
-}, [
-  addressesHydrated,
-  defaultAddress,
-  selectedAddressId,
-]);
-
-useEffect(() => {
-  if (paymentMethod !== "UPI" || timeLeft <= 0) {
-    return;
-  }
-
-  const timer = window.setInterval(() => {
-    setTimeLeft((current) => {
-      if (current <= 1) {
-        window.clearInterval(timer);
-        return 0;
-      }
-
-      return current - 1;
-    });
-  }, 1000);
-
-  return () => {
-    window.clearInterval(timer);
-  };
-}, [paymentMethod, timeLeft]);
-
-useEffect(() => {
-  if (accountHydrated && !session) router.replace("/phone-login?next=/checkout");
-}, [accountHydrated, router, session]);
-
-const formattedTime = `${Math.floor(timeLeft / 60)
-  .toString()
-  .padStart(2, "0")}:${(timeLeft % 60)
-  .toString()
-  .padStart(2, "0")}`;
-
-
+  // Calculations
   const totalMrp = useMemo(
     () =>
       items.reduce(
         (total, item) =>
-          total + item.product.mrp * item.quantity,
+          total + (item.product.mrp || item.product.price) * item.quantity,
         0
       ),
     [items]
   );
 
-  const savings = Math.max(totalMrp - subtotal, 0);
-
-  const deliveryFee =
-    subtotal === 0 || subtotal >= FREE_DELIVERY_MINIMUM
-      ? 0
-      : DELIVERY_FEE;
+  const itemSavings = Math.max(totalMrp - subtotal, 0);
+  const deliverySavings = 30; // ₹30 Free Delivery benefit
+  const totalSavings = itemSavings + deliverySavings + couponDiscount;
 
   const totalAmount = Math.max(
-  subtotal + deliveryFee - couponDiscount,
-  0
-);
+    subtotal + DELIVERY_FEE + HANDLING_CHARGE - couponDiscount,
+    0
+  );
 
-const selectAddressType = (type: AddressType) => {
-  setAddress((current) => ({
-    ...current,
-    addressType: type,
-  }));
+  const formattedTime = `${Math.floor(timeLeft / 60)
+    .toString()
+    .padStart(2, "0")}:${(timeLeft % 60).toString().padStart(2, "0")}`;
 
-  setSelectedAddressId("");
-};
+  const addressString = [
+    address.houseNumber,
+    address.street,
+    address.area,
+    address.city,
+    address.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
-
-    const updateAddress = (
-    event: ChangeEvent<HTMLInputElement>
-  ) => {
-    const { name, value } = event.target;
-
-    let nextValue = value;
-
-    if (name === "phone") {
-      nextValue = value
-        .replace(/\D/g, "")
-        .slice(0, 10);
-    }
-
-    if (name === "pincode") {
-      nextValue = value
-        .replace(/\D/g, "")
-        .slice(0, 6);
-
-      const matchingAreas =
-        getDeliveryAreasByPincode(nextValue);
-
-      setAddress((current) => {
-        const areaStillAvailable =
-          matchingAreas.some(
-            (area) =>
-              area.area === current.area
-          );
-
-        return {
-          ...current,
-          pincode: nextValue,
-          area: areaStillAvailable
-            ? current.area
-            : "",
-          city:
-            matchingAreas[0]?.city ??
-            (nextValue.length === 6
-              ? ""
-              : current.city),
-          state:
-            matchingAreas.length > 0
-              ? "Rajasthan"
-              : nextValue.length === 6
-                ? ""
-                : current.state,
-        };
-      });
-    } else {
-      setAddress((current) => ({
-        ...current,
-        [name]: nextValue,
-      }));
-    }
-
-    setSelectedAddressId("");
-    setError("");
-  };
-  
-  
-
-  const validateAddressStep = () => {
-    if (!items.length) {
-      return "Your cart is empty.";
-    }
-
-    if (
-      !address.fullName?.trim() ||
-      address.fullName.trim().length < 2
-    ) {
-      return "Please enter the customer name.";
-    }
-
-    if (!/^[6-9]\d{9}$/.test(address.phone ?? "")) {
-      return "Please enter a valid 10-digit mobile number.";
-    }
-
-    if (!address.houseNumber?.trim()) {
-      return "Please enter house, flat or shop number.";
-    }
-
-    if (!address.street?.trim()) {
-      return "Please enter street, colony or village.";
-    }
-
-    if (!address.area?.trim()) {
-      return "Please enter or select your area or ward.";
-    }
-
-    if (!address.city?.trim()) {
-      return "Please enter your city.";
-    }
-
-    if (!address.state?.trim()) {
-      return "Please enter your state.";
-    }
-
-    if (!/^\d{6}$/.test(address.pincode ?? "")) {
-      return "Please enter a valid 6-digit pincode.";
-    }
-
-    if (!serviceablePincodes.includes(address.pincode)) {
-      return "BootKiT is currently not delivering to this pincode.";
-    }
-
-    return "";
-  };
-
-  const continueToPayment = () => {
-    const validationError = validateAddressStep();
-
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    setError("");
-    setCheckoutStep(2);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
+  const handleApplySavedAddress = (saved: SavedAddress) => {
+    setSelectedAddressId(saved.id);
+    setAddress({
+      fullName: saved.fullName,
+      phone: saved.phone,
+      houseNumber: saved.houseNumber,
+      street: saved.street,
+      area: saved.area ?? "",
+      landmark: saved.landmark || "",
+      city: saved.city,
+      state: saved.state,
+      pincode: saved.pincode,
+      addressType: saved.addressType,
     });
+    setShowAddressModal(false);
+    showToast("Delivery address updated");
   };
 
-  const validateCheckout = () => {
-    const addressError = validateAddressStep();
+  const handleAddNewAddressSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const houseNumber = formData.get("houseNumber") as string;
+    const street = formData.get("street") as string;
+    const area = formData.get("area") as string;
+    const city = formData.get("city") as string;
+    const pincode = formData.get("pincode") as string;
+    const state = formData.get("state") as string;
+    const addressType = (formData.get("addressType") as AddressType) || "Home";
 
-    if (addressError) {
-      return addressError;
-    }
-
-    if (paymentMethod === "UPI") {
-      if (timeLeft <= 0) {
-        return "The payment QR has expired. Please generate a new QR.";
-      }
-
-      if (!paymentSubmitted) {
-        return "Please complete the UPI payment first.";
-      }
-
-      if (upiTransactionId.trim().length < 8) {
-        return "Please enter a valid UPI transaction or UTR number.";
-      }
-    }
-
-
-    return "";
-  };
-
-  const placeOrder = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!session) {
-      router.replace("/login?next=/checkout");
+    if (!houseNumber || !street || !pincode) {
+      setError("Please fill all required address fields.");
       return;
     }
 
-    if (checkoutStep !== 2) {
-      continueToPayment();
+    const newSaved = await addAddress({
+      fullName: address.fullName || profile?.fullName || "Customer",
+      phone: address.phone || profile?.phone || "9876543210",
+      houseNumber,
+      street,
+      area,
+      landmark: "",
+      city: city || "Jaipur",
+      state: state || "Rajasthan",
+      pincode,
+      addressType,
+      isDefault: addresses.length === 0,
+    });
+
+    handleApplySavedAddress(newSaved);
+    setShowNewAddressForm(false);
+  };
+
+  const handleSaveGstin = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!gstin.trim() || gstin.trim().length < 8) {
+      showToast("Please enter a valid GSTIN number");
+      return;
+    }
+    setSavedGstin({ gstin: gstin.trim(), name: gstinName.trim() });
+    setShowGstinModal(false);
+    showToast("GSTIN details added!");
+  };
+
+  const handlePlaceOrder = () => {
+    if (!items.length) {
+      setError("Your cart is empty.");
       return;
     }
 
-    const validationError = validateCheckout();
+    if (!address.houseNumber && !selectedAddressId) {
+      setShowPaymentModal(false);
+      setShowAddressModal(true);
+      setError("Please provide a delivery address.");
+      return;
+    }
 
-    if (validationError) {
-      setError(validationError);
+    if (paymentMethod === "UPI" && !paymentSubmitted) {
+      setError("Please click 'I Have Paid' after scanning the QR code.");
+      return;
+    }
+
+    if (paymentMethod === "UPI" && upiTransactionId.trim().length < 6) {
+      setError("Please enter a valid UPI Transaction / UTR number.");
       return;
     }
 
@@ -464,32 +367,28 @@ const selectAddressType = (type: AddressType) => {
         items,
         address: {
           ...address,
-          fullName: address.fullName.trim(),
-          phone: address.phone.trim(),
+          fullName: address.fullName || profile?.fullName || "Customer",
+          phone: address.phone || profile?.phone || "9876543210",
           houseNumber: address.houseNumber.trim(),
           street: address.street.trim(),
           area: address.area?.trim() ?? "",
           landmark: address.landmark?.trim() ?? "",
-          city: address.city.trim(),
-          state: address.state.trim(),
-          pincode: address.pincode.trim(),
+          city: address.city.trim() || "Jaipur",
+          state: address.state.trim() || "Rajasthan",
+          pincode: address.pincode.trim() || "302025",
         },
         paymentMethod,
         paymentStatus:
-          paymentMethod === "UPI"
-            ? "Verification Pending"
-            : "Pending",
+          paymentMethod === "UPI" ? "Verification Pending" : "Pending",
         status: "Placed",
         itemTotal: subtotal,
-        deliveryFee,
+        deliveryFee: DELIVERY_FEE,
         totalAmount,
-        savings: savings + couponDiscount,
+        savings: totalSavings,
         offerCode: appliedCoupon?.coupon.code,
         offerDiscount: couponDiscount,
         upiTransactionId:
-          paymentMethod === "UPI"
-            ? upiTransactionId.trim()
-            : undefined,
+          paymentMethod === "UPI" ? upiTransactionId.trim() : undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -499,7 +398,7 @@ const selectAddressType = (type: AddressType) => {
       addNotification({
         type: "ORDER",
         title: "Order placed successfully",
-        message: `Your order ${orderNumber} has been placed for ${formatPrice(
+        message: `Your order #${orderNumber} has been placed for ${formatPrice(
           totalAmount
         )}.`,
         href: `/orders/${orderNumber}`,
@@ -508,800 +407,1159 @@ const selectAddressType = (type: AddressType) => {
       removeCoupon();
       clearCart();
 
-      router.push(
-        `/order-success?order=${encodeURIComponent(orderNumber)}`
-      );
+      router.push(`/order-success?order=${encodeURIComponent(orderNumber)}`);
     } catch {
       setSubmitting(false);
-      setError(
-        "Order could not be created. Please try again."
-      );
+      setError("Order could not be created. Please try again.");
     }
   };
 
-if (
-  !hydrated ||
-  !addressesHydrated ||
-  !couponHydrated
-) {
-
+  if (!cartHydrated || !addressesHydrated || !couponHydrated) {
     return (
-      <div className="min-h-screen bg-[var(--background)]">
-        <Header />
-
-        <Container className="py-8">
-          <div className="h-[480px] animate-pulse rounded-[28px] border border-[var(--border)] bg-white" />
-        </Container>
+      <div className="min-h-screen bg-[#F8FAF8]">
+        <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3.5 sm:px-6">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Back"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white"
+            >
+              <ArrowLeft size={19} />
+            </button>
+            <div className="h-5 w-28 animate-pulse rounded-lg bg-gray-200" />
+          </div>
+        </header>
+        <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
+          <div className="h-44 animate-pulse rounded-2xl bg-white" />
+          <div className="h-60 animate-pulse rounded-2xl bg-white" />
+        </div>
       </div>
     );
   }
 
   if (!items.length) {
     return (
-      <div className="min-h-screen bg-[var(--background)]">
-        <Header />
-
-        <Container className="py-8">
-          <section className="flex min-h-[460px] flex-col items-center justify-center rounded-[28px] border border-[var(--border)] bg-white px-5 text-center shadow-[var(--shadow-sm)]">
-            <PackageCheck
-              size={42}
-              className="text-[var(--primary)]"
-            />
-
-            <h1 className="mt-5 text-2xl font-black text-[var(--text-primary)]">
-              No items available for checkout
-            </h1>
-
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Add products to your cart before placing an order.
-            </p>
-
-            <Link
-              href="/"
-              className="mt-6 flex h-12 items-center justify-center rounded-2xl bg-[var(--primary)] px-6 text-sm font-bold text-white"
+      <div className="min-h-screen bg-[#F8FAF8]">
+        <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3 sm:px-6">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Back"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700"
             >
-              Continue shopping
-            </Link>
-          </section>
-        </Container>
+              <ArrowLeft size={19} />
+            </button>
+            <h1 className="text-lg font-black text-gray-900">Checkout</h1>
+            <div className="w-10" />
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+          <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-green-50 text-[#16A34A]">
+            <PackageCheck size={32} />
+          </div>
+          <h2 className="mt-4 text-lg font-black text-gray-900">
+            Your cart is empty
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            Add items to your cart before proceeding to checkout.
+          </p>
+          <Link
+            href="/"
+            className="mt-5 inline-block rounded-2xl bg-[#16A34A] px-6 py-2.5 text-xs font-black text-white hover:bg-[#15803D]"
+          >
+            Start Shopping
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <Header />
+    <div className="min-h-screen bg-[#F8FAF8] text-[#1E293B]">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 transform animate-bounce rounded-full bg-[#16A34A] px-5 py-2.5 text-xs font-bold text-white shadow-lg">
+          ✓ {toastMessage}
+        </div>
+      )}
 
-      <main>
-        <Container className="py-5 sm:py-8">
-          <div className="mb-6 flex items-center gap-3">
-            <Link
-              href="/cart"
-              aria-label="Back to cart"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-white text-[var(--text-secondary)]"
+      {/* Clean App Header */}
+      <header className="sticky top-0 z-30 border-b border-gray-200/80 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Back"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-700 transition hover:bg-gray-100 active:scale-95"
             >
-              <ArrowLeft size={19} />
-            </Link>
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="text-lg font-black tracking-tight text-gray-900 sm:text-xl">
+              Checkout
+            </h1>
+          </div>
 
-            <div>
-              <h1 className="text-[25px] font-black tracking-[-0.04em] text-[var(--text-primary)] sm:text-[32px]">
-                Secure checkout
-              </h1>
+          <div className="flex items-center gap-2">
+            {/* Top Search Button to Add More Items */}
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setShowSearchModal(true);
+              }}
+              aria-label="Search and add more items"
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100 active:scale-95"
+            >
+              <Search size={19} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: "BootKiT Order",
+                    url: window.location.href,
+                  });
+                }
+              }}
+              className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm hover:bg-gray-50 active:scale-95"
+            >
+              <Share2 size={14} />
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </header>
 
-              <p className="text-xs text-[var(--text-muted)] sm:text-sm">
-                {totalItems} {totalItems === 1 ? "item" : "items"} in
-                your order
-              </p>
+      {/* Main Checkout Flow */}
+      <main className="mx-auto max-w-2xl px-4 py-4 sm:px-6 space-y-4 pb-36">
+        {/* 1. Products in Order Card */}
+        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] space-y-3">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-[#16A34A]" />
+              <span className="text-xs font-black text-gray-900">
+                Delivery in 6 mins
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setShowSearchModal(true);
+              }}
+              className="flex items-center gap-1 text-xs font-bold text-[#16A34A] hover:underline"
+            >
+              <Plus size={14} />
+              <span>Add more items</span>
+            </button>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {items.map((item) => {
+              const rawImg =
+                item.product.thumbnail ||
+                item.product.image ||
+                (Array.isArray(item.product.images) && item.product.images[0]) ||
+                (Array.isArray((item.product as any).gallery) &&
+                  (item.product as any).gallery[0]) ||
+                "";
+              const imgSrc = safeImageUrl(rawImg);
+
+              const unitLabel =
+                typeof item.product.unit === "object"
+                  ? item.product.unit?.label
+                  : item.product.unit || "";
+
+              return (
+                <div
+                  key={item.product.id}
+                  className="flex items-center justify-between py-2.5 gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-[#F8FAFC] p-1">
+                      {/* Product Image */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imgSrc}
+                        alt={item.product.name}
+                        className="h-full w-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.src = "/images/placeholder.png";
+                        }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="line-clamp-1 text-xs font-bold text-gray-900 sm:text-sm">
+                        {item.product.name}
+                      </p>
+                      {unitLabel && (
+                        <p className="text-[10px] text-gray-500 font-medium">
+                          {unitLabel}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quantity Stepper & Price */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center rounded-lg border border-[#16A34A] bg-green-50 px-2 py-0.5 text-xs font-black text-[#16A34A]">
+                      <button
+                        type="button"
+                        onClick={() => decreaseItem(item.product.id)}
+                        className="px-1 py-0.5 hover:opacity-75"
+                      >
+                        -
+                      </button>
+                      <span className="px-1.5">{item.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => increaseItem(item.product.id)}
+                        className="px-1 py-0.5 hover:opacity-75"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <span className="w-14 text-right text-xs font-black text-gray-900">
+                      {formatPrice(item.product.price * item.quantity)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 2. Free Delivery & Coupon Offers Card */}
+        <section className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-[0_2px_10px_rgba(0,0,0,0.03)] space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2563EB] text-white font-bold text-xs">
+                ✓
+              </div>
+              <div>
+                <p className="text-xs font-black text-[#2563EB]">
+                  Yay! You got FREE Delivery
+                </p>
+                <p className="text-[10px] font-medium text-gray-500 flex items-center gap-0.5">
+                  No coupon needed <ChevronRight size={11} />
+                </p>
+              </div>
             </div>
           </div>
-<CheckoutProgress currentStep={checkoutStep} />
-          <form
-  onSubmit={placeOrder}
-  className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_360px]"
->
-            
-            <div className="space-y-5">
 
-              {checkoutStep === 1 && (
-              <section className="rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] sm:p-6">
-                <div className="flex items-center gap-3">
-                  
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]">
-                    <MapPin size={20} />
-                  </span>
-
-                  <div>
-                    <h2 className="text-lg font-black text-[var(--text-primary)]">
-                      Delivery address
-                    </h2>
-
-                    <p className="text-xs text-[var(--text-muted)]">
-                      Enter the complete delivery details
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  
-  <SavedAddressSelector
-    addresses={addresses}
-    selectedAddressId={selectedAddressId}
-    onSelect={applySavedAddress}
-  />
-
-</div>
-
-{selectedAddressId ? (
-  <div className="mt-5">
-    <button
-      type="button"
-      onClick={() => {
-        setSelectedAddressId("");
-        setAddress(initialAddress);
-        setError("");
-      }}
-      className="flex h-12 w-full items-center justify-center rounded-2xl border border-[var(--primary)] bg-[var(--primary-light)] px-4 text-sm font-black text-[var(--primary)] transition hover:bg-green-100"
-    >
-      + Add another address
-    </button>
-
-    <p className="mt-2 text-center text-[11px] text-[var(--text-muted)]">
-      Add a new Home, Office or Other delivery address
-    </p>
-  </div>
-) : (
-  <>
-    <div className="my-6 flex items-center gap-3">
-      <div className="h-px flex-1 bg-[var(--border)]" />
-
-      <span className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--text-muted)]">
-        Add delivery address
-      </span>
-
-      <div className="h-px flex-1 bg-[var(--border)]" />
-    </div>
-
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Field
-        label="Customer name"
-        name="fullName"
-        value={address.fullName}
-        onChange={updateAddress}
-        placeholder="Enter full name"
-        required
-      />
-
-      <div><Field label="Mobile number" name="phone" value={address.phone} onChange={updateAddress} placeholder="10-digit mobile number" inputMode="numeric" required />{contactPickerAvailable && <button type="button" onClick={pickContactNumber} className="mt-2 text-xs font-black text-[var(--primary)]">Choose number from contacts</button>}</div>
-
-      <Field
-        label="House / Flat / Shop"
-        name="houseNumber"
-        value={address.houseNumber}
-        onChange={updateAddress}
-        placeholder="House no. or flat no."
-        required
-      />
-
-      <Field
-        label="Street / Colony / Village"
-        name="street"
-        value={address.street}
-        onChange={updateAddress}
-        placeholder="Street or area name"
-        required
-      />
-
-           <Field
-        label="Pincode"
-        name="pincode"
-        value={address.pincode}
-        onChange={updateAddress}
-        placeholder="6-digit pincode"
-        inputMode="numeric"
-        required
-      />
-
-      {availableDeliveryAreas.length > 0 ? (
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
-            Area / Ward
-            <span className="ml-1 text-[var(--danger)]">*</span>
-          </span>
-
-          <select
-            value={address.area}
-            required
-            onChange={(event) => {
-              const selectedArea =
-                availableDeliveryAreas.find(
-                  (area) =>
-                    area.area === event.target.value
-                );
-
-              setAddress((current) => ({
-                ...current,
-                area: event.target.value,
-                city:
-                  selectedArea?.city ??
-                  current.city,
-                state: selectedArea
-                  ? "Rajasthan"
-                  : current.state,
-              }));
-
-              setSelectedAddressId("");
-              setError("");
-            }}
-            className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-[var(--text-primary)] outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
-          >
-            <option value="">
-              Select area or ward
-            </option>
-
-            {availableDeliveryAreas.map(
-              (deliveryArea) => (
-                <option
-                  key={deliveryArea.id}
-                  value={deliveryArea.area}
-                >
-                  {deliveryArea.area}
-                </option>
-              )
-            )}
-          </select>
-        </label>
-      ) : (
-        <Field
-          label="Area / Ward"
-          name="area"
-          value={address.area}
-          onChange={updateAddress}
-          placeholder="Enter area or ward"
-          required
-        />
-      )}
-
-      <Field
-        label="City"
-        name="city"
-        value={address.city}
-        onChange={updateAddress}
-        placeholder="City auto-filled"
-        readOnly={
-          availableDeliveryAreas.length > 0
-        }
-        required
-      />
-
-      <Field
-        label="State"
-        name="state"
-        value={address.state}
-        onChange={updateAddress}
-        placeholder="State auto-filled"
-        readOnly={
-          availableDeliveryAreas.length > 0
-        }
-        required
-      />
-
-      <Field
-        label="Landmark"
-        name="landmark"
-        value={address.landmark}
-        onChange={updateAddress}
-        placeholder="Nearby landmark (optional)"
-      />
-    </div>
-
-    <div className="mt-5">
-      <p className="text-xs font-bold text-[var(--text-secondary)]">
-        Save address as
-      </p>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {(["Home", "Office", "Other"] as AddressType[]).map(
-          (type) => (
+          <div className="border-t border-gray-100 pt-2">
             <button
-              key={type}
               type="button"
-              onClick={() => selectAddressType(type)}
-              className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-xs font-bold transition ${
-                address.addressType === type
-                  ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary)]"
-                  : "border-[var(--border)] text-[var(--text-secondary)]"
+              onClick={() => setShowCouponDrawer(true)}
+              className="flex w-full items-center justify-between text-xs font-bold text-gray-800 hover:text-[#16A34A] transition"
+            >
+              <div className="flex items-center gap-1.5">
+                <TicketPercent size={15} className="text-[#16A34A]" />
+                <span>
+                  {appliedCoupon
+                    ? `Coupon Applied: ${appliedCoupon.coupon.code} (-${formatPrice(couponDiscount)})`
+                    : "See all coupons"}
+                </span>
+              </div>
+              <ChevronRight size={15} className="text-gray-400" />
+            </button>
+          </div>
+        </section>
+
+        {/* 3. Bill Details Card (Exact Screenshot Match) */}
+        <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.03)]">
+          <div className="p-4 space-y-3">
+            <h2 className="text-sm font-black text-gray-900">Bill details</h2>
+
+            {/* Items total */}
+            <div className="flex items-center justify-between text-xs font-medium text-gray-600">
+              <div className="flex items-center gap-2">
+                <Receipt size={15} className="text-gray-700" />
+                <span>Items total</span>
+                {itemSavings > 0 && (
+                  <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-[#2563EB]">
+                    Saved {formatPrice(itemSavings)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {itemSavings > 0 && (
+                  <span className="line-through text-gray-400">
+                    {formatPrice(totalMrp)}
+                  </span>
+                )}
+                <span className="font-semibold text-gray-900">
+                  {formatPrice(subtotal)}
+                </span>
+              </div>
+            </div>
+
+            {/* Delivery charge */}
+            <div className="flex items-center justify-between text-xs font-medium text-gray-600">
+              <div className="flex items-center gap-2">
+                <Bike size={15} className="text-gray-700" />
+                <span className="border-b border-dotted border-gray-400">
+                  Delivery charge
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="line-through text-gray-400">₹30</span>
+                <span className="font-bold text-[#2563EB]">FREE</span>
+              </div>
+            </div>
+
+            {/* Handling charge */}
+            <div className="flex items-center justify-between text-xs font-medium text-gray-600">
+              <div className="flex items-center gap-2">
+                <ShoppingBag size={15} className="text-gray-700" />
+                <span className="border-b border-dotted border-gray-400">
+                  Handling charge
+                </span>
+              </div>
+              <span className="font-semibold text-gray-900">
+                {formatPrice(HANDLING_CHARGE)}
+              </span>
+            </div>
+
+            {/* Coupon discount (if applied) */}
+            {couponDiscount > 0 && (
+              <div className="flex items-center justify-between text-xs font-medium text-[#16A34A]">
+                <span>Coupon discount ({appliedCoupon?.coupon.code})</span>
+                <span className="font-bold">-{formatPrice(couponDiscount)}</span>
+              </div>
+            )}
+
+            {/* Grand total */}
+            <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between">
+              <span className="text-sm font-black text-gray-900 border-b border-dotted border-gray-900">
+                Grand total
+              </span>
+              <span className="text-base font-black text-gray-900">
+                {formatPrice(totalAmount)}
+              </span>
+            </div>
+          </div>
+
+          {/* Blue Savings Wave / Strip Banner */}
+          <div className="bg-[#EEF4FF] p-3.5 border-t border-blue-100">
+            <div className="flex items-center justify-between text-xs font-black text-[#2563EB]">
+              <span>Your total savings</span>
+              <span className="text-sm">{formatPrice(totalSavings)}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] font-medium text-[#3B82F6]">
+              Includes ₹30 savings through free delivery
+            </p>
+          </div>
+        </section>
+
+        {/* 4. Add GSTIN Card (Opens Center Popup Modal) */}
+        <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.03)]">
+          <button
+            type="button"
+            onClick={() => {
+              setGstin(savedGstin?.gstin || "");
+              setGstinName(savedGstin?.name || "");
+              setShowGstinModal(true);
+            }}
+            className="flex w-full items-center justify-between p-3.5 text-left transition hover:bg-gray-50 active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#2563EB] font-bold text-base">
+                %
+              </div>
+              <div>
+                <p className="text-xs font-black text-gray-900">
+                  {savedGstin ? `GSTIN: ${savedGstin.gstin}` : "Add GSTIN"}
+                </p>
+                <p className="text-[10px] text-gray-500 font-medium">
+                  {savedGstin
+                    ? savedGstin.name || "GST invoice enabled for this order"
+                    : "Claim GST input credit up to 18% on your order"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#16A34A]">
+              {savedGstin ? <span>Edit</span> : <ChevronRight size={18} className="text-gray-400" />}
+            </div>
+          </button>
+        </section>
+
+        {/* 5. Delivery Instructions Card */}
+        <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] space-y-3">
+          <h2 className="text-sm font-black text-gray-900">
+            Delivery instructions
+          </h2>
+
+          <div className="grid grid-cols-3 gap-2.5">
+            {/* Option 1: Record */}
+            <button
+              type="button"
+              onClick={() => setIsRecording((r) => !r)}
+              className={`flex flex-col items-start justify-between rounded-xl border p-2.5 text-left h-22 transition ${
+                isRecording
+                  ? "border-[#16A34A] bg-green-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50"
               }`}
             >
-              <Home size={15} />
-              {type}
-            </button>
-          )
-        )}
-      </div>
-    </div>
-
-                 <div className="mt-5 rounded-xl bg-[var(--surface-soft)] px-4 py-3 text-xs leading-5 text-[var(--text-secondary)]">
-                 Current serviceable pincodes:{" "}
-                 <span className="font-bold text-[var(--primary)]">
-                  {serviceablePincodes.join(", ")}
-              </span>
+              <div className="flex items-center gap-1 text-[11px] font-black text-[#16A34A]">
+                <Mic size={14} />
+                <span>Record</span>
               </div>
-             </>
-             )}
-{error && checkoutStep === 1 && (
-  <div
-    role="alert"
-    className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700"
-  >
-    {error}
-  </div>
-)}
+              <span className="text-[10px] font-medium text-gray-600 leading-tight">
+                Press here and hold
+              </span>
+            </button>
 
-<button
-  type="button"
-  onClick={continueToPayment}
-  className="mt-6 flex h-[52px] w-full items-center justify-between rounded-2xl bg-[var(--primary)] px-5 text-sm font-black text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--primary-hover)]"
->
-  <span>Continue to payment</span>
-  <ChevronRight size={20} />
-</button>
-             
-             
-              </section>
-              
-)}
-              {checkoutStep === 2 && (
-              <section className="rounded-[24px] border border-[var(--border)] bg-white p-4 shadow-[var(--shadow-sm)] sm:p-6">
-                <div className="flex items-center justify-between gap-3">
-  <div className="flex items-center gap-3">
-    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]">
-      <CreditCard size={20} />
-    </span>
-    
+            {/* Option 2: Avoid calling */}
+            <button
+              type="button"
+              onClick={() => setAvoidCalling((v) => !v)}
+              className={`flex flex-col items-start justify-between rounded-xl border p-2.5 text-left h-22 transition ${
+                avoidCalling
+                  ? "border-[#16A34A] bg-green-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex w-full items-center justify-between">
+                <PhoneOff
+                  size={16}
+                  className={avoidCalling ? "text-[#16A34A]" : "text-gray-700"}
+                />
+                <div
+                  className={`h-4 w-4 rounded border flex items-center justify-center text-[10px] font-bold ${
+                    avoidCalling
+                      ? "border-[#16A34A] bg-[#16A34A] text-white"
+                      : "border-gray-300 bg-white"
+                  }`}
+                >
+                  {avoidCalling && "✓"}
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-gray-800 leading-tight">
+                Avoid calling
+              </span>
+            </button>
 
-    <div>
-      <h2 className="text-lg font-black text-[var(--text-primary)]">
-        Payment method
-      </h2>
+            {/* Option 3: Don't ring the bell */}
+            <button
+              type="button"
+              onClick={() => setDontRingBell((v) => !v)}
+              className={`flex flex-col items-start justify-between rounded-xl border p-2.5 text-left h-22 transition ${
+                dontRingBell
+                  ? "border-[#16A34A] bg-green-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="text-base leading-none">🔕</span>
+                <div
+                  className={`h-4 w-4 rounded border flex items-center justify-center text-[10px] font-bold ${
+                    dontRingBell
+                      ? "border-[#16A34A] bg-[#16A34A] text-white"
+                      : "border-gray-300 bg-white"
+                  }`}
+                >
+                  {dontRingBell && "✓"}
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-gray-800 leading-tight">
+                Don&apos;t ring the bell
+              </span>
+            </button>
+          </div>
+        </section>
+      </main>
 
+      {/* 6. Sticky Bottom Action Bar */}
+      <div className="fixed bottom-0 inset-x-0 z-30 border-t border-gray-200/90 bg-white/95 backdrop-blur-md p-3 sm:p-4 shadow-xl">
+        <div className="mx-auto max-w-2xl space-y-2.5">
+          {/* Address Line Bar */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                <Home size={16} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-black text-gray-900">
+                  Delivering to {address.addressType || "Home"}
+                </p>
+                <p className="truncate text-[11px] font-medium text-gray-500">
+                  {addressString || "Set your delivery location"}
+                </p>
+              </div>
+            </div>
 
-      <p className="text-xs text-[var(--text-muted)]">
-        Choose how you want to pay
-      </p>
-    </div>
-  </div>
+            <button
+              type="button"
+              onClick={() => setShowAddressModal(true)}
+              className="shrink-0 text-xs font-black text-[#16A34A] hover:underline"
+            >
+              Change
+            </button>
+          </div>
 
+          {/* Select Payment Method Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!address.houseNumber && !selectedAddressId) {
+                setShowAddressModal(true);
+              } else {
+                setShowPaymentModal(true);
+              }
+            }}
+            className="flex h-12 w-full items-center justify-center rounded-2xl bg-[#16A34A] px-4 text-sm font-black text-white shadow-lg shadow-green-600/20 transition hover:bg-[#15803D] active:scale-[0.99]"
+          >
+            Select Payment Method
+          </button>
+        </div>
+      </div>
 
-</div>
+      {/* Center Modal for Adding GSTIN */}
+      {showGstinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB] font-bold text-sm">
+                  %
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-gray-900">
+                    Add GSTIN Details
+                  </h3>
+                  <p className="text-[10px] font-medium text-gray-500">
+                    Claim tax input credit for business orders
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGstinModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
+            <form onSubmit={handleSaveGstin} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  GSTIN Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                  placeholder="15-digit GSTIN (e.g. 08ABHCS8002R1ZQ)"
+                  maxLength={15}
+                  className="h-11 w-full rounded-xl border border-gray-200 px-3 text-xs font-bold uppercase tracking-wider outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/20"
+                />
+              </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <PaymentOption
-                    active={paymentMethod === "COD"}
-                    icon={<Banknote size={21} />}
-                    title="Cash on Delivery"
-                    description="Pay cash when your order arrives"
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Registered Business Name
+                </label>
+                <input
+                  type="text"
+                  value={gstinName}
+                  onChange={(e) => setGstinName(e.target.value)}
+                  placeholder="Legal Business / Company Name"
+                  className="h-11 w-full rounded-xl border border-gray-200 px-3 text-xs font-medium outline-none focus:border-[#16A34A] focus:ring-2 focus:ring-[#16A34A]/20"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                {savedGstin && (
+                  <button
+                    type="button"
                     onClick={() => {
-  setPaymentMethod("COD");
-  setPaymentSubmitted(false);
-  setPaymentStatus("idle");
-  setUpiTransactionId("");
-  setTimeLeft(PAYMENT_TIME);
-  setError("");
-}}
-                  />
+                      setSavedGstin(null);
+                      setGstin("");
+                      setGstinName("");
+                      setShowGstinModal(false);
+                      showToast("GSTIN removed.");
+                    }}
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100"
+                  >
+                    Remove
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowGstinModal(false)}
+                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-xl bg-[#16A34A] py-2.5 text-xs font-bold text-white shadow-sm hover:bg-[#15803D]"
+                >
+                  Save GSTIN
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-                  <PaymentOption
-                    active={paymentMethod === "UPI"}
-                    icon={<CreditCard size={21} />}
-                    title="UPI · Scan & Pay"
-                    description="Scan QR with any UPI app"
-                    onClick={() => {
-  setPaymentMethod("UPI");
-  setPaymentSubmitted(false);
-  setPaymentStatus("idle");
-  setUpiTransactionId("");
-  setTimeLeft(PAYMENT_TIME);
-  setError("");
-}}
+      {/* Center Search Modal to Search & Add More Items */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg animate-in fade-in zoom-in-95 rounded-3xl bg-white shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Modal Header & Search Bar */}
+            <div className="p-4 border-b border-gray-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-black text-gray-900">
+                  Add more items to order
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowSearchModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="relative flex items-center">
+                <Search
+                  size={17}
+                  className="pointer-events-none absolute left-3.5 text-gray-400"
+                />
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search milk, fruits, snacks, drinks..."
+                  className="h-11 w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-9 text-xs font-medium outline-none focus:border-[#16A34A] focus:bg-white focus:ring-2 focus:ring-[#16A34A]/20"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Search Results List */}
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-gray-100">
+              {searchResults.length === 0 ? (
+                <div className="py-12 text-center text-gray-500">
+                  <p className="text-sm font-bold text-gray-800">
+                    No products found
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Try searching for another product name
+                  </p>
+                </div>
+              ) : (
+                searchResults.map((product) => {
+                  const qtyInCart = getQuantity(product.id);
+                  const rawImg =
+                    product.thumbnail ||
+                    product.image ||
+                    (Array.isArray(product.images) && product.images[0]) ||
+                    "";
+                  const imgSrc = safeImageUrl(rawImg);
+                  const unitLabel =
+                    typeof product.unit === "object"
+                      ? product.unit?.label
+                      : product.unit || "";
+
+                  return (
+                    <div
+                      key={product.id}
+                      className="flex items-center justify-between py-3 gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative flex h-13 w-13 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 bg-[#F8FAFC] p-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={imgSrc}
+                            alt={product.name}
+                            className="h-full w-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.src = "/images/placeholder.png";
+                            }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-xs font-bold text-gray-900">
+                            {product.name}
+                          </p>
+                          {unitLabel && (
+                            <p className="text-[10px] text-gray-500 font-medium">
+                              {unitLabel}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs font-black text-gray-900">
+                              {formatPrice(product.price)}
+                            </span>
+                            {product.mrp > product.price && (
+                              <span className="text-[10px] line-through text-gray-400">
+                                {formatPrice(product.mrp)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Add Button or Stepper */}
+                      <div className="shrink-0">
+                        {qtyInCart > 0 ? (
+                          <div className="flex items-center rounded-xl border border-[#16A34A] bg-green-50 px-2.5 py-1 text-xs font-black text-[#16A34A]">
+                            <button
+                              type="button"
+                              onClick={() => decreaseItem(product.id)}
+                              className="px-1.5 py-0.5 hover:opacity-75"
+                            >
+                              -
+                            </button>
+                            <span className="px-2">{qtyInCart}</span>
+                            <button
+                              type="button"
+                              onClick={() => increaseItem(product.id)}
+                              className="px-1.5 py-0.5 hover:opacity-75"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              addItem(product);
+                              showToast(`Added ${product.name}`);
+                            }}
+                            className="flex items-center gap-1 rounded-xl bg-[#16A34A] px-3.5 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-[#15803D] active:scale-95"
+                          >
+                            <Plus size={14} />
+                            <span>ADD</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Done CTA Footer */}
+            <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+              <div className="text-xs font-bold text-gray-700">
+                <span>{totalItems} items in cart</span> •{" "}
+                <span className="font-black text-gray-900">
+                  {formatPrice(totalAmount)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSearchModal(false)}
+                className="rounded-xl bg-[#16A34A] px-5 py-2 text-xs font-black text-white shadow-sm hover:bg-[#15803D]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Address Selection Modal */}
+      {showAddressModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-3xl bg-white p-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-black text-gray-900">
+                Select Delivery Address
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddressModal(false);
+                  setShowNewAddressForm(false);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {!showNewAddressForm ? (
+              <div className="mt-4 space-y-3">
+                {addresses.map((addr) => {
+                  const isSelected = selectedAddressId === addr.id;
+                  return (
+                    <div
+                      key={addr.id}
+                      onClick={() => handleApplySavedAddress(addr)}
+                      className={`flex cursor-pointer items-start justify-between rounded-2xl border p-3.5 transition ${
+                        isSelected
+                          ? "border-[#16A34A] bg-green-50/40"
+                          : "border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                            isSelected
+                              ? "bg-[#16A34A] text-white"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          <Home size={14} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-gray-900">
+                            {addr.addressType}
+                          </p>
+                          <p className="text-[11px] text-gray-600 leading-tight mt-0.5">
+                            {addr.houseNumber}, {addr.street}, {addr.area},{" "}
+                            {addr.city} - {addr.pincode}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isSelected && (
+                        <CheckCircle2
+                          size={18}
+                          className="shrink-0 text-[#16A34A]"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => setShowNewAddressForm(true)}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#16A34A] bg-green-50/50 text-xs font-black text-[#16A34A] hover:bg-green-100"
+                >
+                  <Plus size={15} />
+                  Add New Address
+                </button>
+              </div>
+            ) : (
+              /* Add New Address Form */
+              <form
+                onSubmit={handleAddNewAddressSubmit}
+                className="mt-4 space-y-3 text-xs"
+              >
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    House / Flat / Shop Number *
+                  </label>
+                  <input
+                    name="houseNumber"
+                    required
+                    placeholder="e.g. Flat 402, House 229"
+                    className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
                   />
                 </div>
 
-                {paymentMethod === "UPI" && (
-                  <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface-soft)] p-4">
-                    <p className="text-xs font-semibold text-[var(--text-muted)]">
-                      Send payment to
-                    </p>
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">
+                    Street / Colony / Area *
+                  </label>
+                  <input
+                    name="street"
+                    required
+                    placeholder="e.g. Sanik Nagar, Main Road"
+                    className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
+                  />
+                </div>
 
-                   <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-3">
-  <div className="min-w-0">
-    <p className="text-xs text-[var(--text-secondary)]">UPI ID</p>
-    <p className="truncate text-sm font-semibold text-[var(--text-primary)]">
-      bootkit@ybl
-    </p>
-  </div>
-
-  <button
-    type="button"
-    onClick={copyUpiId}
-    className="shrink-0 rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-soft)]"
-  >
-    {upiCopied ? "Copied" : "Copy"}
-  </button>
-</div>
-
-<div className="mt-4 rounded-2xl border border-[var(--border)] bg-white p-4">
-  <div className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-amber-50 px-3 py-2.5">
-  <span className="text-xs font-bold text-amber-900">
-    {timeLeft > 0 ? "QR expires in" : "QR expired"}
-  </span>
-
-  {timeLeft > 0 ? (
-    <span className="text-sm font-black text-red-600">
-      {formattedTime}
-    </span>
-  ) : (
-    <button
-      type="button"
-      onClick={() => {
-        setTimeLeft(PAYMENT_TIME);
-        setError("");
-      }}
-
-
-      className="rounded-lg bg-[var(--primary)] px-3 py-2 text-[11px] font-black text-white"
-    >
-      Generate New QR
-    </button>
-  )}
-</div>
-
-  <div className="flex min-h-56 items-center justify-center rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface-soft)] p-4">
-    <div className="rounded-xl bg-white p-3 shadow-sm">
-      <QRCodeSVG value={`upi://pay?pa=bootkit@ybl&pn=BootKiT&am=${totalAmount.toFixed(2)}&cu=INR&tn=BootKiT%20order`} size={184} level="M" includeMargin />
-    </div>
-  </div>
-
-  <p className="mt-3 text-center text-[11px] leading-5 text-[var(--text-muted)]">
-    Scan this QR using any UPI app and pay exactly{" "}
-    <span className="font-black text-[var(--text-primary)]">
-      {formatPrice(totalAmount)}
-    </span>
-  </p>
-</div>
-<button
-  type="button"
-  onClick={() => {
-  setPaymentSubmitted(true);
-  setPaymentStatus("submitted");
-}}
-
-  className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white transition hover:bg-[var(--primary-hover)]"
->
-  
-  I Have Paid
-</button>
-                    <p className="mt-3 text-xs leading-5 text-[var(--text-secondary)]">
-                      After payment, enter the UTR or transaction ID
-                      below. The order will be verified manually.
-                    </p>
-
-                    {paymentSubmitted && (
-  <>
-    <p className="mt-4 text-xs font-semibold text-[var(--text-secondary)]">
-      Enter your UTR / Transaction ID
-    </p>
-
-    <input
-      value={upiTransactionId}
-      onChange={(event) => {
-        setUpiTransactionId(event.target.value);
-        setError("");
-      }}
-      placeholder="Enter UTR / Transaction ID"
-      className="mt-2 h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium outline-none transition focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
-    />
-  </>
-)}
-{paymentStatus === "submitted" && (
-  <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
-    <div className="flex items-center gap-2">
-      <CheckCircle2 className="h-5 w-5 text-amber-600" />
-
-      <span className="text-sm font-bold text-amber-800">
-        Verification Pending
-      </span>
-    </div>
-
-    <p className="mt-2 text-xs leading-5 text-amber-700">
-      We have received your payment request. Your UTR will be verified,
-      and your order will be confirmed after successful verification.
-    </p>
-  </div>
-)}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Area / Ward *
+                    </label>
+                    <input
+                      name="area"
+                      required
+                      defaultValue="Jagatpura"
+                      placeholder="e.g. Jagatpura"
+                      className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
+                    />
                   </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      Pincode *
+                    </label>
+                    <input
+                      name="pincode"
+                      required
+                      defaultValue="302025"
+                      placeholder="6-digit pincode"
+                      className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      name="city"
+                      defaultValue="Jaipur"
+                      className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      name="state"
+                      defaultValue="Rajasthan"
+                      className="h-10 w-full rounded-xl border border-gray-200 px-3 outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAddressForm(false)}
+                    className="flex-1 rounded-xl border border-gray-200 py-2.5 font-bold text-gray-700"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-xl bg-[#16A34A] py-2.5 font-bold text-white shadow-sm hover:bg-[#15803D]"
+                  >
+                    Save & Deliver Here
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Coupon Modal Drawer */}
+      {showCouponDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-black text-gray-900">
+                Coupons & Offers
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCouponDrawer(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4">
+              <CouponSelector
+                subtotal={subtotal}
+                hasPreviousOrders={hasPreviousOrders}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Selection Modal Drawer */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md animate-in fade-in zoom-in-95 rounded-3xl bg-white p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-base font-black text-gray-900">
+                  Select Payment Method
+                </h3>
+                <p className="text-[11px] font-medium text-gray-500">
+                  Total Payable: {formatPrice(totalAmount)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {error && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-2.5 text-xs font-bold text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              {/* COD Option */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("COD")}
+                className={`flex w-full items-center justify-between rounded-2xl border p-3.5 text-left transition ${
+                  paymentMethod === "COD"
+                    ? "border-[#16A34A] bg-green-50/40 ring-2 ring-[#16A34A]/20"
+                    : "border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                    <Banknote size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-gray-900">
+                      Cash on Delivery (COD)
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-medium">
+                      Pay cash when your order arrives
+                    </p>
+                  </div>
+                </div>
+                {paymentMethod === "COD" && (
+                  <CheckCircle2 size={18} className="text-[#16A34A]" />
                 )}
+              </button>
 
+              {/* UPI Scan & Pay Option */}
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("UPI")}
+                className={`flex w-full items-center justify-between rounded-2xl border p-3.5 text-left transition ${
+                  paymentMethod === "UPI"
+                    ? "border-[#16A34A] bg-green-50/40 ring-2 ring-[#16A34A]/20"
+                    : "border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-50 text-[#16A34A]">
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-gray-900">
+                      UPI · Scan & Pay
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-medium">
+                      Pay instantly via GPay, PhonePe, Paytm QR
+                    </p>
+                  </div>
+                </div>
+                {paymentMethod === "UPI" && (
+                  <CheckCircle2 size={18} className="text-[#16A34A]" />
+                )}
+              </button>
 
-<div className="mt-2">
-  <CouponSelector
-    subtotal={subtotal}
-    hasPreviousOrders={hasPreviousOrders}
-  />
-</div>
+              {/* UPI Details Box */}
+              {paymentMethod === "UPI" && (
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between rounded-xl bg-white p-2.5 border border-gray-200">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-400">
+                        UPI ID
+                      </p>
+                      <p className="text-xs font-black text-gray-900">
+                        bootkit@ybl
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={copyUpiId}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-200"
+                    >
+                      {upiCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
 
+                  <div className="flex flex-col items-center justify-center rounded-xl bg-white p-3 border border-gray-200">
+                    <div className="mb-2 flex items-center justify-between w-full text-[11px] font-bold">
+                      <span className="text-gray-500">QR expires in:</span>
+                      <span className="text-red-600 font-mono">
+                        {formattedTime}
+                      </span>
+                    </div>
+                    <QRCodeSVG
+                      value={`upi://pay?pa=bootkit@ybl&pn=BootKiT&am=${totalAmount.toFixed(
+                        2
+                      )}&cu=INR&tn=BootKiT%20Order`}
+                      size={160}
+                      level="M"
+                      includeMargin
+                    />
+                    <p className="mt-2 text-[10px] font-bold text-gray-500">
+                      Scan with any UPI App · Exact: {formatPrice(totalAmount)}
+                    </p>
+                  </div>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentSubmitted(true);
+                      showToast("Payment recorded. Enter UTR number below.");
+                    }}
+                    className="h-10 w-full rounded-xl bg-[#16A34A] text-xs font-black text-white hover:bg-[#15803D]"
+                  >
+                    I Have Paid
+                  </button>
 
-<button
-  type="submit"
-  disabled={
-    submitting ||
-    (paymentMethod === "UPI" &&
-      (!paymentSubmitted ||
-        upiTransactionId.trim().length < 8))
-  }
-  className="mt-5 flex h-[54px] w-full items-center justify-between rounded-2xl bg-[var(--primary)] px-5 text-white shadow-[var(--shadow-sm)] transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-60"
->
-  <span>
-    <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-white/70">
-      {submitting
-        ? "Creating order..."
-        : paymentMethod === "UPI"
-          ? "Submit order"
-          : "Place order"}
-    </span>
-
-    <span className="block text-sm font-black">
-      {formatPrice(totalAmount)}
-    </span>
-  </span>
-
-  {submitting ? (
-    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-  ) : (
-    <ChevronRight size={20} />
-  )}
-</button>
-
-<div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
-  <div className="flex items-center gap-2">
-    <ShieldCheck
-      size={18}
-      className="text-blue-700"
-    />
-
-    <span className="font-bold text-blue-800">
-      100% Secure Checkout
-    </span>
-  </div>
-
-  <p className="mt-2 text-xs leading-5 text-blue-700">
-    BootKiT does not store your UPI PIN or bank credentials.
-  </p>
-</div>
-
-              </section>
+                  {paymentSubmitted && (
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                        Enter UPI UTR / Transaction ID *
+                      </label>
+                      <input
+                        type="text"
+                        value={upiTransactionId}
+                        onChange={(e) => setUpiTransactionId(e.target.value)}
+                        placeholder="12-digit UTR Number"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none focus:border-[#16A34A]"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          
-            
-<aside className="lg:sticky lg:top-24 h-fit">
-  
-  <div className="rounded-3xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)]">
 
-    <div className="flex items-center gap-2">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary-light)] text-[var(--primary)]"><ShieldCheck size={18} /></span>
-      <div><h2 className="text-lg font-black">Secure checkout</h2><p className="text-[10px] text-[var(--text-muted)]">Order items & payment summary</p></div>
-    </div>
-
-    <div className="mt-5 rounded-2xl bg-[var(--surface-soft)] p-3">
-      <div className="mb-2 flex items-center justify-between"><p className="text-xs font-black">Order items</p><span className="text-[10px] font-bold text-[var(--text-muted)]">{totalItems} items</span></div>
-      <div className="space-y-2">
-        {items.map((item) => <div key={item.product.id} className="flex items-center gap-2.5 rounded-xl bg-white px-2.5 py-2"><span role="img" aria-label={item.product.name} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-soft)] text-lg">{item.product.fallbackIcon}</span><span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-black">{item.product.name}</span><span className="block text-[10px] text-[var(--text-muted)]">Qty {item.quantity} · {item.product.unit.label}</span></span><span className="text-xs font-black">{formatPrice(item.product.price * item.quantity)}</span></div>)}
-      </div>
-    </div>
-
-    <div className="mt-5 space-y-2.5 text-sm">
-
-      <SummaryRow
-        label={`Items (${totalItems})`}
-        value={formatPrice(subtotal)}
-      />
-
-      {savings > 0 && (
-        <SummaryRow
-          label="Product Discount"
-          value={`-${formatPrice(savings)}`}
-          success
-        />
+            {/* Place Order CTA Button */}
+            <div className="mt-5 pt-3 border-t">
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={submitting}
+                className="flex h-12 w-full items-center justify-between rounded-2xl bg-[#16A34A] px-5 text-white shadow-lg shadow-green-600/20 transition hover:bg-[#15803D] active:scale-[0.99] disabled:opacity-60"
+              >
+                <span className="text-xs font-black uppercase tracking-wider">
+                  {submitting
+                    ? "Placing Order..."
+                    : paymentMethod === "COD"
+                    ? "Place Order (COD)"
+                    : "Confirm & Place Order"}
+                </span>
+                <span className="text-sm font-black">
+                  {formatPrice(totalAmount)}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-
-      {couponDiscount > 0 && (
-        <SummaryRow
-          label="Offer Discount"
-          value={`-${formatPrice(couponDiscount)}`}
-          success
-        />
-      )}
-
-      <SummaryRow
-        label="Delivery"
-        value={
-          deliveryFee === 0
-            ? "FREE"
-            : formatPrice(deliveryFee)
-        }
-        success={deliveryFee === 0}
-      />
-
-    </div>
-
-    <div className="my-5 border-t border-dashed border-[var(--border)]" />
-
-    <div className="flex items-center justify-between">
-      <span className="text-base font-black">
-        Total
-      </span>
-
-      <span className="text-2xl font-black">
-        {formatPrice(totalAmount)}
-      </span>
-    </div>
-
-    <div className="mt-4 rounded-xl bg-green-50 p-3 text-xs text-green-700">
-      You save{" "}
-      <span className="font-black">
-        {formatPrice(savings + couponDiscount)}
-      </span>{" "}
-      on this order.
-    </div>
-
-  </div>
-</aside>
-
-
-          </form>
-        </Container>
-      </main>
-    </div>
-  );
-}
-
-
-type FieldProps = {
-  readOnly?: boolean;
-  label: string;
-  name: keyof CheckoutAddress;
-  value: string;
-  placeholder: string;
-  required?: boolean;
-  inputMode?:
-    | "text"
-    | "numeric"
-    | "tel"
-    | "email"
-    | "decimal"
-    | "search"
-    | "url";
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-};
-
-function Field({
-  label,
-  name,
-  value,
-  placeholder,
-  required,
-  inputMode = "text",
-  readOnly = false,
-  onChange,
-}: FieldProps) {
-
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-[var(--text-secondary)]">
-        {label}
-        {required && (
-          <span className="ml-1 text-[var(--danger)]">*</span>
-        )}
-      </span>
-
-      <input
-      readOnly={readOnly}
-        type="text"
-        name={name}
-       value={value ?? ""}
-        required={required}
-        inputMode={inputMode}
-        placeholder={placeholder}
-        onChange={onChange}
-        className=" read-only:bg-[var(--surface-soft)] read-only:text-[var(--text-secondary)] h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-sm font-medium text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-4 focus:ring-green-900/10"
-      />
-    </label>
-  );
-}
-
-type PaymentOptionProps = {
-  active: boolean;
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-};
-
-function PaymentOption({
-  active,
-  icon,
-  title,
-  description,
-  onClick,
-}: PaymentOptionProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
-        active
-          ? "border-[var(--primary)] bg-[var(--primary-light)]"
-          : "border-[var(--border)] hover:border-[var(--border-strong)]"
-      }`}
-    >
-      <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-          active
-            ? "bg-[var(--primary)] text-white"
-            : "bg-[var(--surface-soft)] text-[var(--text-secondary)]"
-        }`}
-      >
-        {icon}
-      </span>
-
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-black text-[var(--text-primary)]">
-          {title}
-        </span>
-
-        <span className="mt-0.5 block text-[10px] leading-4 text-[var(--text-muted)]">
-          {description}
-        </span>
-      </span>
-
-      {active && (
-        <CheckCircle2
-          size={19}
-          className="shrink-0 text-[var(--primary)]"
-        />
-      )}
-    </button>
-  );
-}
-
-type SummaryRowProps = {
-  label: string;
-  value: string;
-  success?: boolean;
-};
-
-function SummaryRow({
-  label,
-  value,
-  success = false,
-}: SummaryRowProps) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-[var(--text-secondary)]">
-        {label}
-      </span>
-
-      <span
-        className={`font-bold ${
-          success
-            ? "text-[var(--success)]"
-            : "text-[var(--text-primary)]"
-        }`}
-      >
-        {value}
-      </span>
     </div>
   );
 }

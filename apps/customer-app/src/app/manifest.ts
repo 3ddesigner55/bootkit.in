@@ -55,10 +55,10 @@ export default function manifest(): MetadataRoute.Manifest {
         ],
       },
       {
-        name: "My cart",
-        short_name: "Cart",
-        description: "Open your BootKiT cart",
-        url: "/cart",
+        name: "Checkout",
+        short_name: "Checkout",
+        description: "Proceed to checkout",
+        url: "/checkout",
         icons: [
           {
             src: "/icon",

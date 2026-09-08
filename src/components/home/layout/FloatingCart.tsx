@@ -112,7 +112,7 @@ const remainingItems = Math.max(displayItems.length - 3, 0);
       }`}
     >
       <Link
-        href="/cart"
+        href="/checkout"
         className="pointer-events-auto flex h-[52px] w-[235px] items-center rounded-full bg-[var(--primary)] px-3 shadow-[0_10px_24px_rgba(22,101,52,.22)]"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">

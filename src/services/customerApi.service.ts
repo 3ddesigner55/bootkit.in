@@ -113,6 +113,16 @@ export function subscribeHomeDataUpdates(
 export function invalidateHomeDataCache() {
   homeDataCache.clear();
   pendingHomeRequests.clear();
+  if (typeof window !== "undefined") {
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("bootkit_home_cache_")) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch {}
+  }
 }
 
 export function broadcastHomeConfigUpdate() {
@@ -138,6 +148,26 @@ export function getCachedCustomerHomeData(
   if (entry && Date.now() - entry.timestamp < HOME_CACHE_TTL_MS) {
     return entry.data;
   }
+
+  // Persistent localStorage retrieval for instant 0ms first-paint on refresh
+  if (typeof window !== "undefined") {
+    try {
+      const stored =
+        localStorage.getItem(`bootkit_home_cache_${key}`) ||
+        localStorage.getItem("bootkit_home_cache_default");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && typeof parsed === "object" && parsed.data) {
+          homeDataCache.set(key, {
+            data: parsed.data,
+            timestamp: parsed.timestamp || Date.now(),
+          });
+          return parsed.data as CustomerHomeData;
+        }
+      }
+    } catch {}
+  }
+
   return null;
 }
 
@@ -212,6 +242,16 @@ async function fetchCustomerHomeData(
       };
 
       homeDataCache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+      // Persist to localStorage for 0ms loads
+      if (typeof window !== "undefined") {
+        try {
+          const payload = JSON.stringify({ data: result, timestamp: Date.now() });
+          localStorage.setItem(`bootkit_home_cache_${cacheKey}`, payload);
+          localStorage.setItem("bootkit_home_cache_default", payload);
+        } catch {}
+      }
+
       homeDataListeners.forEach((listener) => {
         try {
           listener(result);

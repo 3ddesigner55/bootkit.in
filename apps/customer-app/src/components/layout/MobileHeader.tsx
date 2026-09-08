@@ -93,8 +93,8 @@ export default function MobileHeader() {
 </Link>
 
           <Link
-            href="/cart"
-            aria-label="Open cart"
+            href="/checkout"
+            aria-label="Open checkout"
             className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--primary)] shadow-[var(--shadow-sm)]"
           >
             <ShoppingBag size={19} />

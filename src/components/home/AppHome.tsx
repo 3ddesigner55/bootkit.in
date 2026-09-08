@@ -61,9 +61,8 @@ export default function AppHome() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [homeData, setHomeData] = useState<CustomerHomeData | null>(() => {
-    return getCachedCustomerHomeData(undefined, location?.city);
-  });
+  const [mounted, setMounted] = useState(false);
+  const [homeData, setHomeData] = useState<CustomerHomeData | null>(null);
 
   // Monotonic request counter for stale-response protection
   const latestRequestId = useRef(0);
@@ -87,6 +86,12 @@ export default function AppHome() {
   }, [location?.city, setResolvedStoreId]);
 
   useEffect(() => {
+    setMounted(true);
+    const cached = getCachedCustomerHomeData(undefined, location?.city);
+    if (cached) {
+      setHomeData(cached);
+    }
+
     // Initial fetch
     fetchFreshHomeData();
 
@@ -195,11 +200,13 @@ export default function AppHome() {
 
         <OfferSection />
 
-        {homeData?.config && (
+        {mounted && homeData?.config ? (
           <HomeDynamicRenderer
             config={homeData.config}
             legacyData={homeData}
           />
+        ) : (
+          <DefaultHomeFallback />
         )}
       </main>
 
