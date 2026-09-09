@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Gift,
   Heart,
   LogOut,
   MapPin,
   Package,
-  Settings,
   UserCircle2,
   X,
 } from "lucide-react";
@@ -23,8 +21,6 @@ const accountActions = [
   { label: "My Orders", icon: Package },
   { label: "My Addresses", icon: MapPin },
   { label: "Wishlist", icon: Heart },
-  { label: "Offers & Coupons", icon: Gift },
-  { label: "Account Settings", icon: Settings },
 ];
 
 export default function MyAccountBottomSheet({

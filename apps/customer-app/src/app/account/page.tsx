@@ -6,19 +6,17 @@ import { useTheme } from "next-themes";
 import {
   ArrowLeft,
   Bell,
-  CircleHelp,
   ChevronRight,
   Gift,
+  Headphones,
   Heart,
   LogOut,
   MapPin,
   Package,
   Pencil,
   Palette,
-  Settings,
   ShieldCheck,
   Store,
-  TicketPercent,
   UserRound,
   Wallet,
   type LucideIcon,
@@ -143,8 +141,8 @@ export default function AccountPage() {
 
         <div className="relative z-10 mx-auto -mt-5 max-w-md space-y-6 px-4">
           <section className="grid grid-cols-3 rounded-[22px] bg-white p-2 shadow-[0_5px_18px_rgba(25,50,34,0.06)]">
-            <QuickAction href="/orders" icon={Package} title="Your Orders" />
-            <QuickAction href="/help" icon={CircleHelp} title="Need Help" />
+            <QuickAction href="/wallet" icon={Wallet} title="BootKiT Money" />
+            <QuickAction href="/help" icon={Headphones} title="Need Help" />
             <QuickAction
               icon={Palette}
               title="App Appearance"
@@ -202,21 +200,16 @@ export default function AccountPage() {
 
           <AccountSection title="Payments & Coupons">
             <AccountLink
-              href="/offers"
-              icon={TicketPercent}
-              title="Coupons"
-              description="View active discounts and coupon codes"
-            />
-            <AccountPlaceholder
+              href="/wallet"
               icon={Wallet}
-              title="Wallet"
-              description="Coming soon"
-              border
+              title="BootKiT Wallet"
+              description="Manage balance & transaction history"
             />
-            <AccountPlaceholder
+            <AccountLink
+              href="/gift-cards"
               icon={Gift}
               title="Gift Cards"
-              description="Coming soon"
+              description="Claim 16-digit gift card & PIN"
               border
             />
             <AccountPlaceholder
@@ -238,44 +231,12 @@ export default function AccountPage() {
                   : "Orders, payments and offers"
               }
             />
-            <AccountLink
-              href="/account/settings"
-              icon={Settings}
-              title="Settings"
-              description="Language and notification preferences"
-              border
-            />
-            <AccountLink
-              href="/help"
-              icon={ShieldCheck}
-              title="Help & Support"
-              description="Orders, payments and delivery"
-              border
-            />
             <AccountPlaceholder
               icon={Store}
               title="About Bootkit"
               description="Learn about BootKiT"
               border
             />
-            {(session?.role === "ADMIN" || session?.role === "OWNER") ? (
-              <AccountLink
-                href="/admin"
-                icon={Store}
-                title="Admin dashboard"
-                description="Manage orders and store data"
-                border
-              />
-            ) : null}
-            {session?.role === "OWNER" ? (
-              <AccountLink
-                href="/owner"
-                icon={Store}
-                title="Owner control centre"
-                description="Manage customer and admin access"
-                border
-              />
-            ) : null}
             {session ? (
               <AccountButton
                 icon={LogOut}
