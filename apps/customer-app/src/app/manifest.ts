@@ -3,10 +3,10 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "BootKiT - Fast Local Delivery",
+    name: "BootKiT — E-Commerce Web App by Ashok Meena",
     short_name: "BootKiT",
     description:
-      "Groceries and daily essentials delivered quickly in selected local areas.",
+      "A modern quick-commerce grocery delivery web application developed as a portfolio showcase by Ashok Meena.",
     start_url: "/",
     scope: "/",
     display: "browser",

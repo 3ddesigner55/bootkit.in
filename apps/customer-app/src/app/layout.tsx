@@ -21,32 +21,36 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BootKiT | Fast Grocery Delivery App",
+  title: "BootKiT — Quick-Commerce Web Platform | Portfolio by Ashok Meena",
   description:
-    "BootKiT delivers groceries, fruits, vegetables and daily essentials in 10–20 minutes from trusted local stores.",
+    "BootKiT is a full-stack quick-commerce & grocery delivery web application engineered by Ashok Meena as an interactive portfolio showcase with Next.js, React, and modern cloud database architectures.",
   keywords: [
     "BootKiT",
-    "Grocery Delivery",
-    "Quick Commerce",
-    "Groceries",
-    "Fresh Vegetables",
-    "Online Grocery",
+    "Ashok Meena",
+    "Ashok Meena Portfolio",
+    "Full-Stack Web App",
+    "Quick Commerce Project",
+    "Grocery Delivery Platform",
+    "Next.js E-Commerce Showcase",
   ],
-  authors: [{ name: "BootKiT" }],
-  creator: "BootKiT",
+  authors: [{ name: "Ashok Meena" }],
+  creator: "Ashok Meena",
+  publisher: "Ashok Meena",
   metadataBase: new URL("https://bootkit.in"),
   openGraph: {
-    title: "BootKiT",
-    description: "Fast grocery delivery in minutes.",
+    title: "BootKiT — Quick-Commerce Web Platform by Ashok Meena",
+    description:
+      "A production-grade full-stack e-commerce web platform developed by Ashok Meena as a portfolio showcase.",
     url: "https://bootkit.in",
-    siteName: "BootKiT",
+    siteName: "BootKiT by Ashok Meena",
     locale: "en_IN",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "BootKiT",
-    description: "Fast Grocery Delivery App",
+    title: "BootKiT — Quick-Commerce Web Platform by Ashok Meena",
+    description:
+      "Full-Stack Quick-Commerce & E-Commerce Web App Portfolio Showcase by Ashok Meena.",
   },
 };
 
