@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import AppInstallBanner from "@/components/app/AppInstallBanner";
-import ServiceWorkerRegister from "@/components/app/ServiceWorkerRegister";
 import Footer from "@/components/layout/Footer";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import Header from "@/components/layout/Header";
@@ -88,8 +86,6 @@ export default function RootLayout({
                               <CouponProvider>
                                 <NotificationProvider>
                                   <ReviewProvider>
-                                    <AppInstallBanner />
-                                    <ServiceWorkerRegister />
                                     <div className="flex min-h-screen flex-col bg-[#f5f8f5] text-[#1a2e1a] antialiased">
                                       <Header />
                                       <main className="flex-1 pb-24 lg:pb-0">{children}</main>

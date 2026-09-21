@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
       "Groceries and daily essentials delivered quickly in selected local areas.",
     start_url: "/",
     scope: "/",
-    display: "standalone",
+    display: "browser",
     orientation: "portrait",
     background_color: "#f6f7f5",
     theme_color: "#165c3a",
